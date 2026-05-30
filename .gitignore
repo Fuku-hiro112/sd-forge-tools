@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local Claude Code settings (personal allowlist)
+.claude/settings.local.json
+
+# Build / temp
+*.log
+tmp/
+build/
