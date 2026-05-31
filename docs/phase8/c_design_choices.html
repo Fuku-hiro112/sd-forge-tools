@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phase 8-C 設計選択肢</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f4ecd8;
+    --paper-warm: #efe5cd;
+    --ink: #1a2a3f;
+    --ink-soft: #2c3e54;
+    --ink-mute: #5d6e82;
+    --line: #2c5f8d;
+    --line-faint: rgba(44,95,141,0.12);
+    --line-soft: rgba(44,95,141,0.28);
+    --vermillion: #c83a1f;
+    --vermillion-soft: #e6826f;
+    --ochre: #b8862a;
+    --green: #4a7c59;
+    --pencil: #7a6f5f;
+    --shadow: rgba(26,42,63,0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    background-image:
+      linear-gradient(var(--line-faint) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-faint) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .frame { max-width: 1280px; margin: 0 auto; padding: 40px 32px 100px; }
+
+  /* HEADER */
+  .stamp-row {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line-soft);
+    padding-bottom: 8px;
+    margin-bottom: 28px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+  .doc-id { border: 1.5px solid var(--vermillion); color: var(--vermillion); padding: 3px 10px; font-weight: 600; letter-spacing: 0.22em; }
+  .title-block { padding-bottom: 28px; margin-bottom: 48px; border-bottom: 2px solid var(--ink); }
+  .title-section { font-family: "IBM Plex Mono", monospace; font-size: 13px; letter-spacing: 0.3em; color: var(--ink-mute); margin-bottom: 10px; }
+  .title-section::before { content: "§8-C ─── "; color: var(--vermillion); font-weight: 600; }
+  h1 { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: clamp(40px, 6vw, 72px); line-height: 1; letter-spacing: -0.015em; margin-bottom: 14px; }
+  h1 em { font-style: italic; color: var(--vermillion); }
+  .lede { font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 20px; color: var(--ink-soft); max-width: 760px; line-height: 1.5; }
+
+  /* QUESTION */
+  .question {
+    background: var(--paper-warm);
+    border: 1.5px solid var(--ink);
+    padding: 22px 28px;
+    margin-bottom: 56px;
+    box-shadow: 4px 4px 0 var(--shadow);
+  }
+  .question h2 { font-family: "Cormorant Garamond", serif; font-size: 26px; font-weight: 600; margin-bottom: 8px; }
+  .question p { color: var(--ink-soft); font-size: 14.5px; }
+  .question .what-changes { margin-top: 12px; padding-top: 10px; border-top: 1px dotted var(--line-soft); font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-mute); line-height: 1.7; }
+
+  /* OPTION CARDS */
+  .options-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-bottom: 56px; }
+  .option {
+    background: var(--paper-warm);
+    border: 1.5px solid var(--ink);
+    padding: 24px 26px 28px;
+    box-shadow: 6px 6px 0 var(--shadow);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .option .badge {
+    position: absolute;
+    top: -12px;
+    left: 18px;
+    background: var(--paper);
+    border: 1.5px solid var(--ink);
+    padding: 3px 14px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .option.opt-a .badge { color: var(--green); border-color: var(--green); }
+  .option.opt-b .badge { color: var(--line); border-color: var(--line); }
+  .option.opt-c .badge { color: var(--vermillion); border-color: var(--vermillion); }
+  .option h3 {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    margin-top: 4px;
+  }
+  .option .label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    color: var(--ink-mute);
+    margin-bottom: 14px;
+    letter-spacing: 0.08em;
+  }
+  .meta-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 14px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+  }
+  .meta-row .cell { background: rgba(44,95,141,0.06); padding: 6px 8px; }
+  .meta-row .k { color: var(--ink-mute); display: block; font-size: 9.5px; letter-spacing: 0.15em; text-transform: uppercase; }
+  .meta-row .v { color: var(--ink); font-weight: 500; }
+  .option .desc { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 14px; line-height: 1.55; }
+
+  .scope-block { margin-bottom: 12px; }
+  .scope-block h4 {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--line-soft);
+    padding-bottom: 4px;
+  }
+  .scope-block ul { list-style: none; }
+  .scope-block li {
+    padding: 3px 0 3px 16px;
+    font-size: 13px;
+    position: relative;
+    line-height: 1.55;
+  }
+  .scope-block li::before {
+    content: "›";
+    position: absolute;
+    left: 0;
+    color: var(--vermillion);
+    font-weight: 600;
+  }
+  .scope-block li.skip::before { content: "✕"; color: var(--ink-mute); }
+  .scope-block li.skip { color: var(--ink-mute); text-decoration: line-through; }
+
+  .pros-cons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px dotted var(--line-soft); }
+  .pros, .cons { font-size: 12.5px; }
+  .pros { color: var(--green); }
+  .cons { color: var(--vermillion); }
+  .pros::before, .cons::before {
+    display: block;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+  .pros::before { content: "+ Pros"; }
+  .cons::before { content: "− Cons"; }
+  .pros ul, .cons ul { list-style: none; }
+  .pros li, .cons li { padding-left: 14px; position: relative; padding-bottom: 3px; line-height: 1.45; }
+  .pros li::before { content: "+"; position: absolute; left: 0; }
+  .cons li::before { content: "−"; position: absolute; left: 0; }
+
+  /* DIAGRAM */
+  .diagram-section { margin-bottom: 56px; }
+  .diagram-section h2 {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .diagram-section h2::before { content: "Ⅱ. "; color: var(--vermillion); font-family: "IBM Plex Mono", monospace; font-size: 14px; letter-spacing: 0.2em; vertical-align: middle; }
+  .diagram-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+  .diagram-card {
+    background: var(--paper-warm);
+    border: 1.5px solid var(--ink);
+    padding: 18px;
+    box-shadow: 3px 3px 0 var(--shadow);
+  }
+  .diagram-card h4 {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+  .flow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--ink-soft);
+  }
+  .flow .node {
+    background: var(--paper);
+    border: 1px solid var(--line-soft);
+    padding: 5px 10px;
+    margin-bottom: 4px;
+    text-align: center;
+    color: var(--ink);
+  }
+  .flow .node.batch { border-color: var(--vermillion); background: rgba(200,58,31,0.06); color: var(--vermillion); }
+  .flow .node.expander { border-color: var(--green); background: rgba(74,124,89,0.08); color: var(--green); }
+  .flow .arrow { text-align: center; color: var(--ink-mute); font-size: 12px; margin: -1px 0; }
+
+  /* TABLE */
+  .table-section { margin-bottom: 56px; }
+  .table-section h2 {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .table-section h2::before { content: "Ⅲ. "; color: var(--vermillion); font-family: "IBM Plex Mono", monospace; font-size: 14px; letter-spacing: 0.2em; vertical-align: middle; }
+  table { width: 100%; border-collapse: collapse; background: var(--paper-warm); border: 1.5px solid var(--ink); box-shadow: 4px 4px 0 var(--shadow); }
+  th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line-soft); font-size: 13.5px; vertical-align: top; }
+  th { background: var(--ink); color: var(--paper); font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; font-weight: 500; }
+  th:first-child { width: 22%; }
+  tr:last-child td { border-bottom: none; }
+  td.a { background: rgba(74,124,89,0.06); }
+  td.b { background: rgba(44,95,141,0.06); }
+  td.c { background: rgba(200,58,31,0.06); }
+  .check { color: var(--green); font-weight: 600; }
+  .warn { color: var(--ochre); font-weight: 600; }
+  .danger { color: var(--vermillion); font-weight: 600; }
+
+  /* RECOMMENDATION */
+  .recommend {
+    background: var(--paper-warm);
+    border: 2px solid var(--ink);
+    padding: 28px 32px;
+    margin-top: 56px;
+    box-shadow: 6px 6px 0 var(--shadow);
+    position: relative;
+  }
+  .recommend::before {
+    content: "推奨";
+    position: absolute;
+    top: -13px;
+    left: 24px;
+    background: var(--vermillion);
+    color: var(--paper);
+    padding: 3px 14px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    font-weight: 600;
+  }
+  .recommend h3 { font-family: "Cormorant Garamond", serif; font-size: 26px; font-weight: 600; margin-bottom: 10px; }
+  .recommend p { color: var(--ink-soft); font-size: 14.5px; margin-bottom: 8px; }
+  .recommend .why { background: rgba(184,134,42,0.07); border-left: 3px solid var(--ochre); padding: 10px 14px; margin-top: 14px; font-size: 13px; }
+
+  @media (max-width: 960px) {
+    .options-grid, .diagram-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <div class="stamp-row">
+    <span>VRAM-SAFE-BATCH / PHASE 8-C DESIGN CHOICE</span>
+    <span class="doc-id">DOC-Ⅷ-C · DRAFT</span>
+    <span>2026-05-26 / FUKU-HIRO112</span>
+  </div>
+
+  <header class="title-block">
+    <div class="title-section">SECTION VIII-C — PROMPT EXPANDER 分離</div>
+    <h1>展開ロジックを<em>どこに置くか。</em></h1>
+    <p class="lede">
+      Phase 8-C1 で <code style="color:var(--vermillion)">prompt_expander.py</code> の骨組は完成。次の C2〜C5 で「実展開ロジック」「展開順 UI」「API」「ネガティブ展開」をどう配分するかで、3 つの設計が存在する。
+    </p>
+  </header>
+
+  <section class="question">
+    <h2>分岐点の核心</h2>
+    <p>
+      現状 (Phase 8-B 時点): <strong style="color:var(--vermillion)">変数 <code>$char</code> の展開は v3b/batch_runner の中だけで起きる</strong>。Script 未選択の通常生成では展開されない。
+    </p>
+    <p style="margin-top:6px;">
+      Phase 8-C で目指す姿: <strong style="color:var(--green)">prompt_expander が AlwaysOn で展開する</strong> ことで、Script 未選択でも <code>$char</code> が効くようになる。
+    </p>
+    <div class="what-changes">
+      ▸ <strong>展開ロジック本体</strong>の置き場所 — batch_runner (現状) / prompt_expander (移管) のどちら<br>
+      ▸ <strong>展開順 UI</strong> (▲▼で並び替える Dataframe) の置き場所 — batch_resume Script / AlwaysOn 拡張<br>
+      ▸ <strong>API エンドポイント</strong> (variables/sync_variables/SSE) の登録元 — api_endpoints.py / prompt_expander.py<br>
+      ▸ <strong>ネガティブ自動展開</strong>の置き場所 — batch_runner / prompt_expander
+    </div>
+  </section>
+
+  <!-- OPTIONS -->
+  <section class="options-grid">
+
+    <!-- OPTION A -->
+    <article class="option opt-a">
+      <span class="badge">Option A · 保守的</span>
+      <h3>API だけ移管</h3>
+      <div class="label">8-C は最小スコープ</div>
+      <div class="meta-row">
+        <div class="cell"><span class="k">Risk</span><span class="v">低</span></div>
+        <div class="cell"><span class="k">Commits</span><span class="v">~2</span></div>
+        <div class="cell"><span class="k">Lines</span><span class="v">~150</span></div>
+        <div class="cell"><span class="k">Phases</span><span class="v">C2 + C5</span></div>
+      </div>
+      <p class="desc">
+        API 移管 (C2) と dynamic-prompts 警告 (C5) だけを 8-C で実施。
+        展開ロジック本体・展開順 UI・ネガティブ展開はすべて batch_runner / batch_resume 側に残す。
+        prompt_expander は <strong>Script 未選択時用の AlwaysOn 展開</strong>のみを担当 (展開順は自動抽出のみ)。
+      </p>
+
+      <div class="scope-block">
+        <h4>含まれるタスク</h4>
+        <ul>
+          <li>C2: API 移管 (variables / sync_variables / SSE)</li>
+          <li>C5: dynamic-prompts 衝突警告</li>
+          <li>prompt_expander.process() に最小展開ロジック (auto-order のみ)</li>
+        </ul>
+      </div>
+      <div class="scope-block">
+        <h4>含まれないタスク (8-D 以降に延期)</h4>
+        <ul>
+          <li class="skip">C3: batch_runner から事前展開撤去</li>
+          <li class="skip">C4: ネガティブ自動展開の移管</li>
+          <li class="skip">展開順 UI 移管</li>
+        </ul>
+      </div>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <ul>
+            <li>動作変更が最小</li>
+            <li>ロールバック容易</li>
+            <li>batch_resume は完全に現状維持</li>
+            <li>二重展開リスクなし (Script 選択時は prompt_expander が自動 no-op)</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <ul>
+            <li>展開ロジックの重複 (batch_runner と prompt_expander の両方に存在)</li>
+            <li>8-D 以降でリファクタが必要</li>
+            <li>Phase 8 の最終形まで遠回り</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <!-- OPTION B -->
+    <article class="option opt-b">
+      <span class="badge">Option B · 標準</span>
+      <h3>フル実装</h3>
+      <div class="label">展開順 UI のみ 8-D で整理</div>
+      <div class="meta-row">
+        <div class="cell"><span class="k">Risk</span><span class="v">中</span></div>
+        <div class="cell"><span class="k">Commits</span><span class="v">~4</span></div>
+        <div class="cell"><span class="k">Lines</span><span class="v">~400</span></div>
+        <div class="cell"><span class="k">Phases</span><span class="v">C2〜C5</span></div>
+      </div>
+      <p class="desc">
+        playbook の標準案。展開ロジック本体 (C3) とネガティブ展開 (C4) を prompt_expander に移管し、batch_runner は <code>p.all_prompts</code> を読むだけにする。
+        ただし<strong>展開順 UI は batch_resume 側に残す</strong> — script_args 経由で「順序リスト」を prompt_expander に通知する設計。
+      </p>
+
+      <div class="scope-block">
+        <h4>含まれるタスク</h4>
+        <ul>
+          <li>C2: API 移管</li>
+          <li>C3: batch_runner の事前展開を撤去 + script_args 連携</li>
+          <li>C4: ネガティブ自動展開を移管</li>
+          <li>C5: dynamic-prompts 警告</li>
+        </ul>
+      </div>
+      <div class="scope-block">
+        <h4>含まれないタスク (8-D)</h4>
+        <ul>
+          <li class="skip">展開順 UI の置き場再検討</li>
+        </ul>
+      </div>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <ul>
+            <li>展開ロジックが 1 箇所に集約</li>
+            <li>Script 未選択でも完全動作</li>
+            <li>playbook 通りの進行</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <ul>
+            <li>script_args 経由の通信が新概念で複雑</li>
+            <li>L2 テスト必須 (動作変更が広範)</li>
+            <li>batch_resume と prompt_expander の協調設計が必要</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <!-- OPTION C -->
+    <article class="option opt-c">
+      <span class="badge">Option C · 攻め</span>
+      <h3>展開順 UI も移管</h3>
+      <div class="label">batch_resume は履歴/再開だけに</div>
+      <div class="meta-row">
+        <div class="cell"><span class="k">Risk</span><span class="v">高</span></div>
+        <div class="cell"><span class="k">Commits</span><span class="v">~6</span></div>
+        <div class="cell"><span class="k">Lines</span><span class="v">~600</span></div>
+        <div class="cell"><span class="k">Phases</span><span class="v">C2〜C5 拡張</span></div>
+      </div>
+      <p class="desc">
+        最も綺麗な責務分離。展開順 UI (Dataframe / ▲▼ / 🔄 / 🔢 / シードモード… の一群) も prompt_expander 側に移し、batch_resume は<strong>履歴 v2 と再開フローだけに集中</strong>。
+        将来的に prompt_expander 単独利用や別 Script との組合せが容易になる。
+      </p>
+
+      <div class="scope-block">
+        <h4>含まれるタスク</h4>
+        <ul>
+          <li>C2: API 移管</li>
+          <li>C3: batch_runner の事前展開を撤去</li>
+          <li>C4: ネガティブ自動展開を移管</li>
+          <li>C5: dynamic-prompts 警告</li>
+          <li>+ 展開順 UI の移管 (~300 行)</li>
+        </ul>
+      </div>
+      <div class="scope-block">
+        <h4>含まれないタスク (8-D)</h4>
+        <ul>
+          <li>batch_resume の縮小 (履歴/再開のみに)</li>
+        </ul>
+      </div>
+
+      <div class="pros-cons">
+        <div class="pros">
+          <ul>
+            <li>最も綺麗な責務分離</li>
+            <li>prompt_expander 単独利用が可能に</li>
+            <li>batch_resume が小さくなる</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <ul>
+            <li>UI 構造の大規模変更</li>
+            <li>L2 確認必須</li>
+            <li>ロールバックコスト大</li>
+            <li>展開順 UI を Script 横断で再描画する仕組みが必要</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+  </section>
+
+  <!-- DIAGRAMS -->
+  <section class="diagram-section">
+    <h2>データ流の比較</h2>
+    <div class="diagram-grid">
+
+      <div class="diagram-card">
+        <h4>Option A — 保守的</h4>
+        <div class="flow">
+          <div class="node">User: $char, masterpiece</div>
+          <div class="arrow">▼ Script 選択?</div>
+          <div class="node batch">YES: batch_resume が展開</div>
+          <div class="arrow">─ または ─</div>
+          <div class="node expander">NO: prompt_expander が展開<br>(auto-order)</div>
+          <div class="arrow">▼</div>
+          <div class="node">process_images で生成</div>
+        </div>
+        <p style="margin-top:10px;font-size:12px;color:var(--ink-mute);font-style:italic;">
+          batch_runner と prompt_expander の<strong>両方</strong>に展開ロジックが存在。重複あり。
+        </p>
+      </div>
+
+      <div class="diagram-card">
+        <h4>Option B — 標準</h4>
+        <div class="flow">
+          <div class="node">User: $char, masterpiece</div>
+          <div class="arrow">▼</div>
+          <div class="node expander">prompt_expander.process()<br>p.all_prompts を書き換え</div>
+          <div class="arrow">▼ Script 選択?</div>
+          <div class="node batch">YES: batch_resume<br>(履歴・再開・シード・展開順)</div>
+          <div class="arrow">─ または ─</div>
+          <div class="node">NO: 標準生成</div>
+          <div class="arrow">▼</div>
+          <div class="node">process_images で生成</div>
+        </div>
+        <p style="margin-top:10px;font-size:12px;color:var(--ink-mute);font-style:italic;">
+          展開は 1 箇所に集約。batch_resume は<strong>展開順</strong>を script_args で通知。
+        </p>
+      </div>
+
+      <div class="diagram-card">
+        <h4>Option C — 攻め</h4>
+        <div class="flow">
+          <div class="node">User: $char, masterpiece</div>
+          <div class="arrow">▼</div>
+          <div class="node expander">prompt_expander<br>UI: 展開順 + 🔄 + 🔢</div>
+          <div class="arrow">▼ 展開ロジック</div>
+          <div class="node expander">p.all_prompts 書換</div>
+          <div class="arrow">▼ Script 選択?</div>
+          <div class="node batch">YES: batch_resume<br>(履歴/再開のみ)</div>
+          <div class="arrow">─ または ─</div>
+          <div class="node">NO: 標準生成</div>
+        </div>
+        <p style="margin-top:10px;font-size:12px;color:var(--ink-mute);font-style:italic;">
+          完全な責務分離。<strong>展開順 UI が常時表示</strong>される (Script 未選択でも見える)。
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- COMPARISON TABLE -->
+  <section class="table-section">
+    <h2>比較表</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>観点</th>
+          <th>A · 保守的</th>
+          <th>B · 標準</th>
+          <th>C · 攻め</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>動作変更の幅</td>
+          <td class="a"><span class="check">小</span> (新規 AlwaysOn 展開のみ)</td>
+          <td class="b"><span class="warn">中</span> (batch_runner が大きく変わる)</td>
+          <td class="c"><span class="danger">大</span> (UI 構造も変更)</td>
+        </tr>
+        <tr>
+          <td>L2 動作確認の重要度</td>
+          <td class="a">R-03 のみ</td>
+          <td class="b">R-03, R-05, R-07, R-08, R-10, R-11, R-12</td>
+          <td class="c">R-01〜R-12 全件</td>
+        </tr>
+        <tr>
+          <td>展開ロジックの重複</td>
+          <td class="a"><span class="danger">あり</span> (batch_runner + prompt_expander)</td>
+          <td class="b"><span class="check">なし</span></td>
+          <td class="c"><span class="check">なし</span></td>
+        </tr>
+        <tr>
+          <td>Script 未選択時の動作</td>
+          <td class="a"><span class="check">展開 OK</span> (auto-order のみ)</td>
+          <td class="b"><span class="check">展開 OK</span> (auto-order のみ)</td>
+          <td class="c"><span class="check">展開 OK + 順序 UI 操作可</span></td>
+        </tr>
+        <tr>
+          <td>Phase 8-D の作業量</td>
+          <td class="a"><span class="danger">大</span> (C3/C4 を後ろ倒し)</td>
+          <td class="b"><span class="check">小</span> (リネームと整理)</td>
+          <td class="c"><span class="check">最小</span> (履歴部分の整理のみ)</td>
+        </tr>
+        <tr>
+          <td>ロールバック容易性</td>
+          <td class="a"><span class="check">高</span></td>
+          <td class="b"><span class="warn">中</span></td>
+          <td class="c"><span class="danger">低</span> (UI 構造復元が必要)</td>
+        </tr>
+        <tr>
+          <td>playbook 適合度</td>
+          <td class="a">playbook の "判断要" を後送り</td>
+          <td class="b"><span class="check">playbook の主案に合致</span></td>
+          <td class="c">playbook の "シンプル案" に合致</td>
+        </tr>
+        <tr>
+          <td>推定コミット数</td>
+          <td class="a">~2</td>
+          <td class="b">~4</td>
+          <td class="c">~6</td>
+        </tr>
+        <tr>
+          <td>UI トグル ON/OFF で<br>無効化できるか</td>
+          <td class="a"><span class="check">可</span></td>
+          <td class="b"><span class="check">可</span></td>
+          <td class="c"><span class="check">可</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- RECOMMENDATION -->
+  <div class="recommend">
+    <h3>本エージェントの推奨: <em style="font-style:italic;color:var(--green);">Option A (保守的)</em></h3>
+    <p>
+      理由: L2 動作確認をユーザーがスキップしている現状で、Option B/C の広範な動作変更は<strong>気付けないリグレッションを生むリスク</strong>が高い。Phase 8-C は「prompt_expander という箱を作る」ことに集中し、ロジック移管は L2 を有人で実施できる段階で行うのが安全。
+    </p>
+    <p style="margin-top:8px;">
+      Option A でも「Script 未選択で <code>$char</code> が効くようになる」という Phase 8-C の主要価値は獲得できる。展開ロジックの重複は 8-D / 8-E 完了後に別途解消すれば良い。
+    </p>
+    <div class="why">
+      <strong>注意</strong>: ただし「playbook 通りに進めたい」「気付けるリグレッションは自分で受け持つ」というスタンスなら Option B が標準案。本拡張の最終形に最短距離で到達できる。
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

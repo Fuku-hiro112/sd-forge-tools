@@ -20,11 +20,18 @@
 
 ## このプロジェクトでの AI 駆動開発の進め方
 
-「動けば OK」では事故 (CUDA silent fallback、`scripts/` auto-import 起動不能化、VRAM leak、UI 見える ≠ 動く) が頻発する分野のため、品質ルールを Skill として明文化し Claude Code に必ず守らせている。
+「動けば OK」では事故 (CUDA silent fallback、`scripts/` auto-import 起動不能化、VRAM leak、UI 見える ≠ 動く) が頻発する分野のため、**プロジェクト固有 Skill + 汎用 Skill (Superpowers) + 設計提案を HTML で明文化** という 3 つの仕組みを組み合わせて品質を担保している。
 
-### プロジェクト固有 Skill: [`.claude/skills/tdd-forge/SKILL.md`](.claude/skills/tdd-forge/SKILL.md)
+### 使用している Skill
 
-`tdd-forge` は本プロジェクト固有の落とし穴に対処する TDD ワークフロー Skill。汎用 TDD では拾えない以下を強制する:
+| Skill | 出所 | 役割 |
+|---|---|---|
+| [`tdd-forge`](.claude/skills/tdd-forge/SKILL.md) | **本プロジェクト固有** (自作) | forge 特有の落とし穴 (auto-import 事故 / CUDA fallback / VRAM leak / UI 検証) に対応した TDD + L1/L2/L3 多段検証ワークフロー |
+| [`superpowers`](https://github.com/obra/superpowers) | 公式 Claude Code プラグイン | `brainstorming` (発散) → `writing-plans` (実装計画) → `executing-plans` (TDD 駆動実装) → `verification-before-completion` (完了前検証) → `subagent-driven-development` (Verifier 分離) のフレーム。`tdd-forge` の上位の進行ルールとして使う |
+
+`superpowers` で全体の進め方 (発散 → 計画 → 実装 → 検証) を Skill 駆動で固定し、その中の「実装+検証」フェーズで forge 固有の `tdd-forge` が発動する、という二段構え。
+
+### `tdd-forge` の 5 フェーズ (抜粋)
 
 | 段階 | やること |
 |---|---|
@@ -36,11 +43,32 @@
 
 ### Verifier sub-agent への blind 検証委譲
 
-3 ファイル以上・100 行以上の改修、ユーザー報告 L2 不具合、全 L3 案件は **実装者が VERIFY を別 sub-agent に委譲** する。実装方針を渡さず症状と期待観測だけを伝え、自己検証バイアスを排除する。
+3 ファイル以上・100 行以上の改修、ユーザー報告 L2 不具合、全 L3 案件は **実装者が VERIFY を別 sub-agent に委譲** する。実装方針を渡さず症状と期待観測だけを伝え、自己検証バイアスを排除する (superpowers の `subagent-driven-development` を `tdd-forge` 流に運用)。
+
+### 設計議論を HTML で残す ── 「AI に提案させて私が代案を出す」
+
+リファクタや大規模機能追加では、Claude に **複数案を HTML ドキュメントとして出力させる** ルールを敷いている。テキストでの説明だけだと「読み流して同意してしまう」事故が起きやすいため、図解・比較表・ホバー解説付き HTML にすることで:
+
+- 自分が **冷静に評価できる** (テキストの羅列より圧倒的に把握しやすい)
+- **代案を出しやすい** (どこに反対するかが明確になる)
+- 後から **判断の経緯を辿れる** (なぜ A 案を選んだかが残る)
+
+実物は [`docs/`](docs/) に蓄積。Phase 8 (1075 行のモノリス `vram_safe_batch_v3b.py` を 4 拡張に分割) の作業はすべてこのプロセスを踏んでいる:
+
+| ドキュメント | 種別 | 目的 |
+|---|---|---|
+| [`docs/phase8/refactoring_plan.html`](docs/phase8/refactoring_plan.html) | 全体設計 | Phase 8 全体の責務分離設計図 (ユーザー承認用) |
+| [`docs/phase8/c_design_choices.html`](docs/phase8/c_design_choices.html) | **3 案比較 (保守/標準/攻め)** | Claude が出した複数案。ユーザーがトレードオフを評価して選択 |
+| [`docs/phase8/c_ui_restructure.html`](docs/phase8/c_ui_restructure.html) | UI 移管設計 | 大規模 UI 移管の事前合意 |
+| [`docs/phase8/f_text_replace_plan.html`](docs/phase8/f_text_replace_plan.html) | 新機能設計 | Ctrl+F 検索置換パネルの設計 |
+| [`docs/phase8/implementation_playbook.md`](docs/phase8/implementation_playbook.md) | 実装プレイブック | Claude 実装エージェント向けの詳細手順 (機能 ID / 不変条件 / Phase 別手順) |
+| [`docs/archive/`](docs/archive/) | 過去設計 | 採用されなかった案・上書きされた設計 (経緯保存) |
+
+ブラウザで HTML を開くと、SVG / 比較表 / 専門用語ホバー解説付きで読める。これらは「実装後にまとめた docs」ではなく **「Claude が提案 → 私が承認/代案 → 実装着手」の順** で書かれている (= AI に主導権を渡さない設計プロセス)。
 
 ### 指示スタイル
 
-- 設計判断は A 案 / B 案 のトレードオフを Claude に出させ、ユーザーが選択
+- 設計判断は A 案 / B 案 / C 案 を HTML で出させ、ユーザーが選択 (上記参照)
 - 大規模リファクタ前は memory (`.claude/projects/*/memory/`) で「過去にやらかしたパターン」を確認
   - 例: `scripts/test_*.py` は WebUI 起動時 auto-import で起動不能化する (2026-05-13 事故) → tests は `tests/` 配下強制
 
@@ -52,7 +80,14 @@
 
 ```
 .
-├── .claude/skills/tdd-forge/SKILL.md      Claude に守らせる TDD/検証ルール
+├── .claude/skills/tdd-forge/SKILL.md      Claude に守らせる TDD/検証ルール (自作)
+├── docs/                                   設計議論 (HTML) / 過去案 / ユーザー作業メモ
+│   ├── README.md                           docs 目次
+│   ├── phase8/                             Phase 8 責務分離 (refactoring_plan, c_design_choices 等)
+│   ├── archive/                            過去の設計案 (現在の正本ではない)
+│   ├── guides/                             ユーザー向け使い方ガイド
+│   ├── images/                             ガイドから参照されるスクショ
+│   └── user_memo/                          ユーザー手書きの修正案メモ
 └── scripts/                                forge の scripts/ にそのまま置く
     ├── prompt_expander.py                  $変数展開
     ├── sd_variable_manager.html            変数管理 UI 本体

@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phase 8-C UI: UI 大規模移管 設計図</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f4ecd8;
+    --paper-warm: #efe5cd;
+    --ink: #1a2a3f;
+    --ink-soft: #2c3e54;
+    --ink-mute: #5d6e82;
+    --line: #2c5f8d;
+    --line-faint: rgba(44,95,141,0.12);
+    --line-soft: rgba(44,95,141,0.28);
+    --vermillion: #c83a1f;
+    --green: #4a7c59;
+    --ochre: #b8862a;
+    --shadow: rgba(26,42,63,0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    background-image: linear-gradient(var(--line-faint) 1px, transparent 1px), linear-gradient(90deg, var(--line-faint) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .frame { max-width: 1280px; margin: 0 auto; padding: 36px 32px 100px; }
+  .stamp-row { display: flex; justify-content: space-between; border-bottom: 1px solid var(--line-soft); padding-bottom: 8px; margin-bottom: 26px; font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.18em; color: var(--ink-mute); text-transform: uppercase; }
+  .doc-id { border: 1.5px solid var(--vermillion); color: var(--vermillion); padding: 3px 10px; font-weight: 600; letter-spacing: 0.22em; }
+  .title-block { padding-bottom: 24px; margin-bottom: 44px; border-bottom: 2px solid var(--ink); }
+  .title-section { font-family: "IBM Plex Mono", monospace; font-size: 12px; letter-spacing: 0.3em; color: var(--ink-mute); margin-bottom: 8px; }
+  .title-section::before { content: "§8-C-UI ─── "; color: var(--vermillion); font-weight: 600; }
+  h1 { font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; font-size: clamp(36px, 5.5vw, 64px); line-height: 1; letter-spacing: -0.015em; margin-bottom: 12px; }
+  h1 em { font-style: italic; color: var(--vermillion); }
+  .lede { font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 19px; color: var(--ink-soft); max-width: 800px; line-height: 1.5; }
+
+  .section { margin-bottom: 52px; }
+  .section-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 22px; padding-bottom: 10px; border-bottom: 1px solid var(--line-soft); }
+  .section-num { font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--vermillion); font-weight: 600; }
+  .section-title { font-family: "Cormorant Garamond", serif; font-size: 28px; font-weight: 600; }
+  .section-title em { font-style: italic; color: var(--ink-mute); }
+
+  /* BEFORE/AFTER UI MOCKUP */
+  .mock-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .mock-panel { background: var(--paper-warm); border: 1.5px solid var(--ink); padding: 22px 24px 26px; box-shadow: 5px 5px 0 var(--shadow); position: relative; }
+  .mock-tag { position: absolute; top: -12px; left: 18px; background: var(--paper); padding: 3px 12px; font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; font-weight: 600; }
+  .mock-panel.before .mock-tag { color: var(--vermillion); border: 1.5px solid var(--vermillion); }
+  .mock-panel.after .mock-tag { color: var(--green); border: 1.5px solid var(--green); }
+  .mock-panel h3 { font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 21px; margin-bottom: 12px; color: var(--ink); }
+  .accordion { background: rgba(44,95,141,0.06); border: 1px solid var(--line-soft); padding: 10px 12px 12px; margin-bottom: 10px; }
+  .accordion-title { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink); font-weight: 600; margin-bottom: 6px; letter-spacing: 0.05em; }
+  .accordion ul { list-style: none; padding-left: 4px; }
+  .accordion li { font-size: 12.5px; color: var(--ink-soft); padding: 2px 0 2px 14px; position: relative; line-height: 1.5; }
+  .accordion li::before { content: "·"; position: absolute; left: 4px; color: var(--ink-mute); font-weight: 700; }
+  .accordion.moved { background: rgba(74,124,89,0.08); border-color: var(--green); }
+  .accordion.moved .accordion-title::before { content: "→ "; color: var(--green); }
+  .accordion.stays { background: rgba(184,134,42,0.07); border-color: var(--ochre); }
+  .accordion.removed { background: rgba(200,58,31,0.05); border-color: var(--vermillion); }
+  .accordion.removed .accordion-title { color: var(--vermillion); text-decoration: line-through; }
+  .accordion.added .accordion-title::before { content: "+ "; color: var(--green); font-weight: 700; }
+  .mock-panel .footer-note { margin-top: 12px; padding-top: 10px; border-top: 1px dotted var(--line-soft); font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--ink-mute); }
+
+  /* DATA FLOW DIAGRAM */
+  .flow-card { background: var(--paper-warm); border: 1.5px solid var(--ink); padding: 22px 28px; box-shadow: 5px 5px 0 var(--shadow); margin-bottom: 18px; }
+  .flow-card h3 { font-family: "Cormorant Garamond", serif; font-size: 22px; font-weight: 600; margin-bottom: 14px; }
+  .flow-card h3 .pill { display: inline-block; background: var(--ink); color: var(--paper); padding: 2px 10px; font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: 0.18em; vertical-align: middle; margin-right: 10px; font-weight: 500; }
+  .flow-row { display: grid; grid-template-columns: 200px 1fr; gap: 14px; align-items: start; margin-bottom: 10px; }
+  .flow-when { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--vermillion); font-weight: 600; letter-spacing: 0.08em; padding-top: 2px; }
+  .flow-step { font-size: 13.5px; color: var(--ink-soft); padding-bottom: 8px; border-bottom: 1px dotted var(--line-soft); }
+  .flow-step code { font-family: "IBM Plex Mono", monospace; font-size: 12px; background: rgba(44,95,141,0.08); padding: 1px 5px; border-radius: 2px; color: var(--ink); }
+  .flow-step strong { color: var(--vermillion); }
+  .flow-row:last-child .flow-step { border-bottom: none; }
+
+  /* COMMIT TABLE */
+  table { width: 100%; border-collapse: collapse; background: var(--paper-warm); border: 1.5px solid var(--ink); box-shadow: 4px 4px 0 var(--shadow); }
+  th, td { padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--line-soft); font-size: 13px; vertical-align: top; }
+  th { background: var(--ink); color: var(--paper); font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: 0.15em; text-transform: uppercase; font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+  td code { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; background: rgba(44,95,141,0.08); padding: 1px 5px; border-radius: 2px; }
+  .col-step { width: 80px; font-family: "IBM Plex Mono", monospace; font-weight: 600; color: var(--vermillion); }
+  .col-risk { width: 80px; }
+  .risk-low { color: var(--green); font-weight: 600; }
+  .risk-mid { color: var(--ochre); font-weight: 600; }
+  .risk-high { color: var(--vermillion); font-weight: 600; }
+
+  /* RISK CARDS */
+  .risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .risk-card { border-left: 4px solid var(--vermillion); background: var(--paper-warm); padding: 14px 18px; }
+  .risk-card h5 { font-family: "Cormorant Garamond", serif; font-style: italic; font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .risk-card p { font-size: 13px; color: var(--ink-soft); line-height: 1.55; }
+  .risk-card .mit { margin-top: 6px; padding-top: 6px; border-top: 1px dotted var(--line-soft); font-size: 12px; color: var(--green); }
+  .risk-card .mit::before { content: "+ 緩和: "; color: var(--green); font-weight: 600; font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: 0.1em; }
+
+  .key-decision { background: rgba(184,134,42,0.08); border-left: 4px solid var(--ochre); padding: 14px 18px; margin: 20px 0; }
+  .key-decision h4 { font-family: "Cormorant Garamond", serif; font-size: 18px; font-weight: 600; font-style: italic; margin-bottom: 6px; }
+  .key-decision p { font-size: 13.5px; color: var(--ink-soft); line-height: 1.55; }
+
+  @media (max-width: 900px) {
+    .mock-grid { grid-template-columns: 1fr; }
+    .risk-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+
+<div class="stamp-row">
+  <span>PHASE 8-C / UI RESTRUCTURE PROPOSAL</span>
+  <span class="doc-id">DOC-Ⅷ-C-UI · DRAFT</span>
+  <span>2026-05-26 / FUKU-HIRO112</span>
+</div>
+
+<header class="title-block">
+  <div class="title-section">SECTION VIII-C-UI — UI 大規模移管</div>
+  <h1>v3b から、<em>$ Prompt Expander へ。</em></h1>
+  <p class="lede">
+    変数展開に関する UI 一式を AlwaysOn 拡張 <code style="color:var(--vermillion);">$ Prompt Expander</code> に集約し、Batch Resume (旧 v3b) は<strong>履歴と再開だけ</strong>に純化する。Phase 8-C の最終ステップ。
+  </p>
+</header>
+
+<!-- I. WHAT MOVES WHERE -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">Ⅰ.</span>
+    <h2 class="section-title">UI の<em>移管マップ</em></h2>
+  </div>
+
+  <div class="mock-grid">
+
+    <div class="mock-panel before">
+      <span class="mock-tag">Before · 現状</span>
+      <h3>VRAM Safe Batch v3b (Script ドロップダウン選択)</h3>
+
+      <div class="accordion">
+        <div class="accordion-title">📖 記法・使い方 Accordion (8 サブセクション)</div>
+        <ul>
+          <li>① 変数参照の書き方</li>
+          <li>② 変数名に使える文字 / 使えない文字</li>
+          <li>③ 変数定義の 3 方式</li>
+          <li>④〜⑧ (他のサブセクション)</li>
+        </ul>
+      </div>
+      <div class="accordion">
+        <div class="accordion-title">📂 途中再開</div>
+        <ul>
+          <li>履歴ドロップダウン (動的選択肢)</li>
+          <li>履歴詳細 Textbox</li>
+          <li>「選択した履歴から再開」チェック</li>
+        </ul>
+      </div>
+      <div class="accordion">
+        <div class="accordion-title">📊 展開順 + 操作群</div>
+        <ul>
+          <li>Dataframe (1 列、行 dynamic)</li>
+          <li>▲▼×⟲ 並替/削除/クリアボタン</li>
+          <li>➕ 追加 textbox + 重複検出</li>
+          <li>🔄 メインから取得 (JS)</li>
+          <li>🔢 枚数プレビュー</li>
+          <li>🎲 シードモード Radio (連番/固定)</li>
+          <li>📥 Variable Manager → メイン投入</li>
+          <li>ステータス Textbox (peek_jobs)</li>
+        </ul>
+      </div>
+
+      <div class="footer-note">ui_builder.py · 478 行 / run() 引数: 4 個</div>
+    </div>
+
+    <div class="mock-panel after">
+      <span class="mock-tag">After · 提案</span>
+      <h3>$ Prompt Expander (AlwaysOn) + Batch Resume (Script)</h3>
+
+      <div class="accordion added moved">
+        <div class="accordion-title">$ Prompt Expander Accordion (AlwaysOn・常時表示)</div>
+        <ul>
+          <li>有効化チェックボックス (既存)</li>
+          <li>dynamic-prompts 警告 (既存)</li>
+          <li>📖 記法・使い方 (8 サブセクション)</li>
+          <li>📊 展開順 Dataframe + ▲▼×⟲</li>
+          <li>➕ 追加 textbox</li>
+          <li>🔄 メインから取得</li>
+          <li>🔢 枚数プレビュー</li>
+          <li>🎲 シードモード Radio</li>
+          <li>📥 Variable Manager → メイン投入</li>
+          <li>ステータス Textbox</li>
+        </ul>
+      </div>
+
+      <div class="accordion stays">
+        <div class="accordion-title">📂 Batch Resume Script (選択時のみ表示)</div>
+        <ul>
+          <li>履歴ドロップダウン</li>
+          <li>履歴詳細 Textbox</li>
+          <li>「選択した履歴から再開」チェック</li>
+        </ul>
+      </div>
+
+      <div class="accordion removed">
+        <div class="accordion-title">展開順 UI / 記法 Accordion / 各種ボタン</div>
+        <ul>
+          <li>v3b 側からは削除</li>
+        </ul>
+      </div>
+
+      <div class="footer-note">prompt_expander.py で UI 担当 / batch_resume.run() 引数: 2 個</div>
+    </div>
+
+  </div>
+
+  <div class="key-decision">
+    <h4>核心の設計判断</h4>
+    <p>
+      <code style="font-family:'IBM Plex Mono',monospace;">📂 途中再開</code> Accordion は <strong>Batch Resume Script に残置</strong>。理由: 履歴 v2 と再開ロジックは Script 選択時にのみ意味を持つ機能であり、AlwaysOn 化すると常時履歴ファイルを読みに行く負荷とトーストノイズが増えるため。
+    </p>
+  </div>
+</section>
+
+<!-- II. DATA FLOW -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">Ⅱ.</span>
+    <h2 class="section-title">データ流の<em>新しい姿</em></h2>
+  </div>
+
+  <div class="flow-card">
+    <h3><span class="pill">CASE A</span>Script 未選択 (Forge 標準生成)</h3>
+    <div class="flow-row"><div class="flow-when">1. Click</div><div class="flow-step">User がメインプロンプトに <code>$char, masterpiece</code> + Generate</div></div>
+    <div class="flow-row"><div class="flow-when">2. AlwaysOn process</div><div class="flow-step"><code>prompt_expander.process(p, enabled, expansion_order_df, seed_mode, …)</code> が呼ばれる</div></div>
+    <div class="flow-row"><div class="flow-when">3. 展開</div><div class="flow-step">UI から取得した順序で <code>expand_prompts</code> → <strong>p.all_prompts / p.all_seeds / p.all_negative_prompts / p.n_iter</strong> を書換</div></div>
+    <div class="flow-row"><div class="flow-when">4. 標準生成</div><div class="flow-step">process_images() が <code>p.all_prompts</code> を順次処理して N 枚生成</div></div>
+  </div>
+
+  <div class="flow-card">
+    <h3><span class="pill">CASE B</span>Batch Resume Script 選択 + 新規モード</h3>
+    <div class="flow-row"><div class="flow-when">1. Click</div><div class="flow-step">User が Batch Resume を選択して Generate (再開チェック OFF)</div></div>
+    <div class="flow-row"><div class="flow-when">2. AlwaysOn process</div><div class="flow-step"><code>prompt_expander.process()</code> が動作 → <strong>p.all_prompts 等を書換</strong>。<em>従来の <code>_is_batch_resume_active</code> ガードは撤去</em></div></div>
+    <div class="flow-row"><div class="flow-when">3. Script run</div><div class="flow-step"><code>batch_resume.run(p, history_dropdown, resume_check)</code> が呼ばれる</div></div>
+    <div class="flow-row"><div class="flow-when">4. 履歴記録</div><div class="flow-step">resume_check=False のため新規エントリを history_v2 に作成 (展開順は p から逆引き)</div></div>
+    <div class="flow-row"><div class="flow-when">5. 生成ループ</div><div class="flow-step">batch_runner が <code>p.all_prompts</code> をイテレート + 各画像生成 + 進捗 update_entry。<strong>展開ロジック (<code>expand_prompts</code>) 呼出は撤去</strong></div></div>
+  </div>
+
+  <div class="flow-card">
+    <h3><span class="pill">CASE C</span>Batch Resume Script 選択 + 再開モード</h3>
+    <div class="flow-row"><div class="flow-when">1. Click</div><div class="flow-step">User が履歴を選択 + 再開チェック ON + Generate</div></div>
+    <div class="flow-row"><div class="flow-when">2. AlwaysOn process</div><div class="flow-step">prompt_expander が展開して p.all_prompts を書く (CASE B と同じ)</div></div>
+    <div class="flow-row"><div class="flow-when">3. Script run</div><div class="flow-step">batch_resume が <strong>p.all_prompts を上書き</strong>: 履歴エントリの <code>used_variables</code> + <code>expansion_order</code> から再構築。同一順序での再開を保証</div></div>
+    <div class="flow-row"><div class="flow-when">4. スキップ</div><div class="flow-step">history.progress.completed まで <code>continue</code> でスキップ、残りを生成</div></div>
+  </div>
+</section>
+
+<!-- III. COMMIT PLAN -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">Ⅲ.</span>
+    <h2 class="section-title">分割<em>コミット計画</em></h2>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th class="col-step">Step</th>
+        <th>内容</th>
+        <th>主な変更ファイル</th>
+        <th>動作変更</th>
+        <th class="col-risk">Risk</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="col-step">UI-1</td>
+        <td>prompt_expander.ui() に Accordion + 展開順 UI + 記法ヘルプ + 各ボタンを追加 (v3b と <strong>一時的に二重表示</strong>)。process() はまだ既存の auto-order 動作のまま。</td>
+        <td><code>prompt_expander.py</code></td>
+        <td>UI 表示増加のみ</td>
+        <td><span class="risk-low">低</span></td>
+      </tr>
+      <tr>
+        <td class="col-step">UI-2</td>
+        <td>prompt_expander.process() が新 UI 値 (expansion_order / seed_mode) を使うように切替。<code>_is_batch_resume_active</code> ガードは維持 (batch_resume 動作を変えない)。</td>
+        <td><code>prompt_expander.py</code></td>
+        <td>Script 未選択時の展開挙動が UI 反映に</td>
+        <td><span class="risk-mid">中</span></td>
+      </tr>
+      <tr>
+        <td class="col-step">UI-3</td>
+        <td>batch_runner の expand_prompts 呼出を撤去、<code>p.all_prompts</code> を消費する形に。<strong>同時に</strong> prompt_expander の batch_resume ガードを撤去 (常時展開)。batch_resume.run() が prompt_expander の展開結果を前提とする。</td>
+        <td><code>batch_runner.py</code><br><code>prompt_expander.py</code></td>
+        <td>batch_resume の内部動作が変わる</td>
+        <td><span class="risk-high">高</span></td>
+      </tr>
+      <tr>
+        <td class="col-step">UI-4</td>
+        <td>v3b / ui_builder から移管済み UI を削除。batch_resume.run() の引数を <code>(p, history_dropdown, resume_check)</code> に縮小。再開時の上書きロジックを実装。</td>
+        <td><code>ui_builder.py</code><br><code>vram_safe_batch_v3b.py</code><br><code>batch_runner.py</code></td>
+        <td>v3b UI が大幅縮小</td>
+        <td><span class="risk-high">高</span></td>
+      </tr>
+      <tr>
+        <td class="col-step">UI-5</td>
+        <td>git tag phase-8-c-done</td>
+        <td>—</td>
+        <td>—</td>
+        <td><span class="risk-low">—</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- IV. RISKS -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">Ⅳ.</span>
+    <h2 class="section-title"><em>リスク</em>と緩和策</h2>
+  </div>
+  <div class="risk-grid">
+    <div class="risk-card">
+      <h5>Variable Manager JS の 🔄 / 📥 ボタン連携</h5>
+      <p>「🔄 メインから取得」「📥 Variable Manager → メインに投入」は Manager 側の JS と elem_id で連携している。elem_id が変わると外部連携が壊れる。</p>
+      <div class="mit">elem_id を v3b 時代と同一に保つ。移管後に Manager JS 側の参照を一覧確認。</div>
+    </div>
+    <div class="risk-card">
+      <h5>Forge AlwaysOn 拡張同士の処理順序</h5>
+      <p>dynamic-prompts や ADetailer 等の AlwaysOn と sorting_priority が衝突する可能性。</p>
+      <div class="mit">prompt_expander.sorting_priority = 5 (低め) で展開を早期実施。L2 で ADetailer / Hires.fix / sd-forge-couple 併用確認 (R-10〜R-12)。</div>
+    </div>
+    <div class="risk-card">
+      <h5>p.all_prompts 書換後の Forge 標準パスの挙動</h5>
+      <p>p.n_iter / p.batch_size を書き換えるとプログレスバーや infotext の seed 表示が崩れる可能性。dynamic-prompts と同パターンだが Forge 固有差分は要確認。</p>
+      <div class="mit">UI-2 直後に手動で 1 回検証 (R-03)。崩れたら p.iteration / p.all_subseeds 等の追加調整。</div>
+    </div>
+    <div class="risk-card">
+      <h5>再開モードでの整合性</h5>
+      <p>Batch Resume が p.all_prompts を上書きするタイミング次第で、最初の 1 枚が prompt_expander 版で生成されてから batch_resume 版に切り替わる可能性。</p>
+      <div class="mit">batch_resume.run() の冒頭で resume 判定 → 即時 p.all_prompts 書換 → process_images 呼出、の順序を厳守。L2 で R-07 (Interrupt → 再開) を確認。</div>
+    </div>
+    <div class="risk-card">
+      <h5>ロールバックコスト</h5>
+      <p>UI-3 / UI-4 で複数ファイルが大きく変わるため、問題発覚時の戻し作業が大規模。</p>
+      <div class="mit">Step ごとに独立コミット (UI-1〜UI-4)。各コミットで動作テスト可能な状態を維持。問題は <code>git reset --hard &lt;tag&gt;</code> で即座に戻せる。</div>
+    </div>
+    <div class="risk-card">
+      <h5>展開順 UI のセッション間永続化</h5>
+      <p>v3b 時代は Script 選択するたびに UI が再構築されていた。AlwaysOn 化で Gradio セッション間で値が変わる挙動の差が出る可能性。</p>
+      <div class="mit">UI-1 完了後にブラウザリロード → 展開順 Dataframe の初期値が空であること確認。空 → 自動展開で同等動作。</div>
+    </div>
+  </div>
+</section>
+
+<!-- V. SUMMARY -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">Ⅴ.</span>
+    <h2 class="section-title"><em>合意ポイント</em>のまとめ</h2>
+  </div>
+  <ul style="list-style:none;padding:0;">
+    <li style="padding:8px 0 8px 26px;position:relative;font-size:14px;line-height:1.55;border-bottom:1px dotted var(--line-soft);"><span style="position:absolute;left:0;color:var(--vermillion);font-weight:700;font-family:'IBM Plex Mono',monospace;">①</span><strong>展開順 / シードモード / 記法ヘルプ / 操作ボタン</strong>を Prompt Expander Accordion に移管</li>
+    <li style="padding:8px 0 8px 26px;position:relative;font-size:14px;line-height:1.55;border-bottom:1px dotted var(--line-soft);"><span style="position:absolute;left:0;color:var(--vermillion);font-weight:700;font-family:'IBM Plex Mono',monospace;">②</span><strong>履歴 / 再開チェック</strong>は Batch Resume Script に残置 (Script 選択時のみ表示)</li>
+    <li style="padding:8px 0 8px 26px;position:relative;font-size:14px;line-height:1.55;border-bottom:1px dotted var(--line-soft);"><span style="position:absolute;left:0;color:var(--vermillion);font-weight:700;font-family:'IBM Plex Mono',monospace;">③</span>変数展開は <strong>常に prompt_expander が担当</strong>。batch_resume は p.all_prompts を消費 (再開時のみ上書き)</li>
+    <li style="padding:8px 0 8px 26px;position:relative;font-size:14px;line-height:1.55;border-bottom:1px dotted var(--line-soft);"><span style="position:absolute;left:0;color:var(--vermillion);font-weight:700;font-family:'IBM Plex Mono',monospace;">④</span>UI-1〜UI-4 の <strong>4 コミット分割</strong>で段階実装、各コミットでロールバック可能</li>
+    <li style="padding:8px 0 8px 26px;position:relative;font-size:14px;line-height:1.55;border-bottom:1px dotted var(--line-soft);"><span style="position:absolute;left:0;color:var(--vermillion);font-weight:700;font-family:'IBM Plex Mono',monospace;">⑤</span>L2 動作確認は <strong>UI-2 / UI-4 完了直後</strong>に簡易確認 (R-03 単発生成 / R-07 再開)</li>
+    <li style="padding:8px 0 8px 26px;position:relative;font-size:14px;line-height:1.55;"><span style="position:absolute;left:0;color:var(--vermillion);font-weight:700;font-family:'IBM Plex Mono',monospace;">⑥</span>Variable Manager の JS 連携 (elem_id) は <strong>v3b 時代と同一</strong>に保つ</li>
+  </ul>
+</section>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>§8 責務分離 — Architectural Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* =========================================================
+     §8 BLUEPRINT — Architectural Refactoring Plan
+     Eggshell paper / Prussian blue grid / Cinnabar markings
+     ========================================================= */
+  :root {
+    --paper: #f4ecd8;
+    --paper-warm: #efe5cd;
+    --ink: #1a2a3f;
+    --ink-soft: #2c3e54;
+    --ink-mute: #5d6e82;
+    --line: #2c5f8d;
+    --line-faint: rgba(44,95,141,0.12);
+    --line-soft: rgba(44,95,141,0.28);
+    --vermillion: #c83a1f;
+    --vermillion-soft: #e6826f;
+    --ochre: #b8862a;
+    --pencil: #7a6f5f;
+    --shadow: rgba(26,42,63,0.12);
+    --grain: rgba(26,42,63,0.025);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 15px;
+    line-height: 1.65;
+    overflow-x: hidden;
+    /* paper texture: blueprint grid + paper grain */
+    background-image:
+      linear-gradient(var(--line-faint) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-faint) 1px, transparent 1px),
+      radial-gradient(circle at 30% 20%, var(--grain) 0%, transparent 60%),
+      radial-gradient(circle at 70% 80%, var(--grain) 0%, transparent 60%);
+    background-size: 24px 24px, 24px 24px, 100% 100%, 100% 100%;
+  }
+
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse at top, transparent 0%, rgba(244,236,216,0.4) 100%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence baseFrequency='0.85' numOctaves='2' seed='5'/><feColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.16 0 0 0 0 0.25 0 0 0 0.04 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .frame {
+    position: relative;
+    z-index: 1;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 40px 32px 100px;
+  }
+
+  /* ============ HEADER STAMP ============ */
+  .stamp-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line-soft);
+    margin-bottom: 32px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--ink-mute);
+  }
+  .stamp-row .stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .stamp-row .stamp::before {
+    content: "◆";
+    color: var(--vermillion);
+    font-size: 10px;
+  }
+  .doc-id {
+    border: 1.5px solid var(--vermillion);
+    color: var(--vermillion);
+    padding: 3px 10px;
+    font-weight: 600;
+    letter-spacing: 0.22em;
+  }
+
+  /* ============ TITLE ============ */
+  .title-block {
+    position: relative;
+    margin-bottom: 56px;
+    padding-bottom: 28px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .title-section {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    letter-spacing: 0.3em;
+    color: var(--ink-mute);
+    margin-bottom: 10px;
+  }
+  .title-section::before {
+    content: "§8 ─── ";
+    color: var(--vermillion);
+    font-weight: 600;
+  }
+  h1.title-main {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(48px, 8vw, 96px);
+    line-height: 0.95;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    margin-bottom: 14px;
+  }
+  h1.title-main em {
+    font-style: italic;
+    font-weight: 500;
+    color: var(--vermillion);
+  }
+  .title-sub {
+    font-family: "Cormorant Garamond", Georgia, serif;
+    font-style: italic;
+    font-size: 22px;
+    font-weight: 400;
+    color: var(--ink-soft);
+    max-width: 720px;
+    line-height: 1.45;
+  }
+
+  /* ============ STAT STRIP ============ */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin-bottom: 64px;
+    border-top: 1px solid var(--line-soft);
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .stat {
+    padding: 22px 20px;
+    border-right: 1px solid var(--line-soft);
+    position: relative;
+  }
+  .stat:last-child { border-right: none; }
+  .stat-label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--ink-mute);
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 42px;
+    font-weight: 600;
+    color: var(--ink);
+    line-height: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .stat-value .unit {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--ink-mute);
+    letter-spacing: 0.1em;
+  }
+
+  /* ============ SECTION HEADERS ============ */
+  .section {
+    margin-bottom: 80px;
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 28px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .section-num {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--vermillion);
+    font-weight: 600;
+  }
+  .section-title {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .section-title em {
+    font-style: italic;
+    font-weight: 500;
+    color: var(--ink-mute);
+  }
+  .section-marker {
+    margin-left: auto;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: 0.15em;
+  }
+
+  /* ============ BEFORE / AFTER COMPARISON ============ */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 24px;
+    align-items: stretch;
+  }
+  .compare-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: "Cormorant Garamond", serif;
+    font-style: italic;
+    color: var(--vermillion);
+    gap: 12px;
+  }
+  .compare-arrow .arrow {
+    font-size: 36px;
+    line-height: 1;
+  }
+  .compare-arrow .label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-mute);
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+  }
+
+  .panel {
+    border: 1.5px solid var(--ink);
+    background: var(--paper-warm);
+    padding: 24px 26px;
+    position: relative;
+    box-shadow: 6px 6px 0 var(--shadow);
+  }
+  .panel-tag {
+    position: absolute;
+    top: -11px;
+    left: 16px;
+    background: var(--paper);
+    padding: 0 10px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+  }
+  .panel-before .panel-tag { color: var(--vermillion); }
+  .panel-after  .panel-tag { color: var(--line); }
+
+  .panel h3 {
+    font-family: "Cormorant Garamond", serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 22px;
+    color: var(--ink);
+    margin-bottom: 12px;
+  }
+  .panel .meta {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    color: var(--ink-mute);
+    letter-spacing: 0.08em;
+    margin-bottom: 18px;
+  }
+  .panel ul {
+    list-style: none;
+  }
+  .panel ul li {
+    padding: 7px 0 7px 18px;
+    border-bottom: 1px dotted var(--line-soft);
+    position: relative;
+    font-size: 14px;
+  }
+  .panel ul li:last-child { border-bottom: none; }
+  .panel ul li::before {
+    content: "──";
+    position: absolute;
+    left: 0;
+    color: var(--pencil);
+    font-family: "IBM Plex Mono", monospace;
+  }
+  .panel ul li .lines {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    color: var(--vermillion);
+    float: right;
+    background: rgba(200,58,31,0.08);
+    padding: 1px 7px;
+    border-radius: 2px;
+  }
+
+  /* ============ EXTENSION CARDS ============ */
+  .ext-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+  .ext-card {
+    border: 1.5px solid var(--ink);
+    background: var(--paper-warm);
+    padding: 26px 28px;
+    position: relative;
+    box-shadow: 6px 6px 0 var(--shadow);
+    transition: transform 0.3s cubic-bezier(0.2,0,0,1), box-shadow 0.3s cubic-bezier(0.2,0,0,1);
+  }
+  .ext-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 10px 10px 0 var(--shadow);
+  }
+  .ext-card .ext-num {
+    position: absolute;
+    top: -12px;
+    right: 18px;
+    background: var(--paper);
+    border: 1.5px solid var(--ink);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Cormorant Garamond", serif;
+    font-style: italic;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .ext-card .ext-type {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--vermillion);
+    margin-bottom: 6px;
+  }
+  .ext-card h4 {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 4px;
+    letter-spacing: -0.005em;
+  }
+  .ext-card .ext-codename {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12px;
+    color: var(--line);
+    margin-bottom: 14px;
+  }
+  .ext-card .ext-desc {
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    margin-bottom: 16px;
+    line-height: 1.55;
+  }
+  .ext-card .ext-details {
+    border-top: 1px dotted var(--line-soft);
+    padding-top: 14px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    color: var(--ink-mute);
+    line-height: 1.7;
+  }
+  .ext-card .ext-details strong {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  /* ============ PHASE TIMELINE ============ */
+  .timeline {
+    position: relative;
+    padding-left: 60px;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 22px;
+    top: 18px;
+    bottom: 18px;
+    width: 1.5px;
+    background: var(--ink);
+  }
+  .phase {
+    position: relative;
+    margin-bottom: 38px;
+    background: var(--paper-warm);
+    border: 1.5px solid var(--ink);
+    padding: 22px 28px 26px;
+    box-shadow: 4px 4px 0 var(--shadow);
+  }
+  .phase:last-child { margin-bottom: 0; }
+  .phase-marker {
+    position: absolute;
+    left: -55px;
+    top: 16px;
+    width: 44px;
+    height: 44px;
+    background: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Cormorant Garamond", serif;
+    font-size: 17px;
+    font-weight: 600;
+    font-style: italic;
+    color: var(--ink);
+  }
+  .phase-head {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px dotted var(--line-soft);
+  }
+  .phase-id {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--vermillion);
+    font-weight: 600;
+  }
+  .phase-title {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: -0.005em;
+  }
+  .phase-meta {
+    margin-left: auto;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--ink-mute);
+    display: flex;
+    gap: 14px;
+  }
+  .phase-meta .tag {
+    background: rgba(44,95,141,0.1);
+    color: var(--line);
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+
+  .phase-body { display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; }
+  .phase-body h5 {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--ink-mute);
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--line-soft);
+    padding-bottom: 4px;
+  }
+  .phase-body ul li {
+    padding: 4px 0 4px 14px;
+    font-size: 13px;
+    position: relative;
+    line-height: 1.55;
+  }
+  .phase-body ul li::before {
+    content: "›";
+    position: absolute;
+    left: 0;
+    color: var(--vermillion);
+    font-weight: 600;
+  }
+  .verify {
+    background: rgba(184,134,42,0.07);
+    border-left: 3px solid var(--ochre);
+    padding: 10px 14px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 12px;
+  }
+  .verify-label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ochre);
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+
+  /* ============ RISK CALLOUTS ============ */
+  .risk-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+  .risk-card {
+    border-left: 4px solid var(--vermillion);
+    background: var(--paper-warm);
+    padding: 16px 20px;
+    position: relative;
+  }
+  .risk-card::before {
+    content: "△";
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    color: var(--vermillion);
+    font-size: 14px;
+  }
+  .risk-card h5 {
+    font-family: "Cormorant Garamond", serif;
+    font-style: italic;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 6px;
+    padding-right: 24px;
+  }
+  .risk-card p {
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.55;
+  }
+  .risk-card p strong { color: var(--vermillion); }
+
+  /* ============ GIT MANAGEMENT ============ */
+  .git-panel {
+    background: var(--paper-warm);
+    border: 1.5px solid var(--ink);
+    padding: 28px 32px;
+    box-shadow: 6px 6px 0 var(--shadow);
+  }
+  .git-flow {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+  .git-node {
+    text-align: center;
+    padding: 14px 8px;
+    border: 1.5px solid var(--ink);
+    background: var(--paper);
+    position: relative;
+  }
+  .git-node + .git-node::before {
+    content: "→";
+    position: absolute;
+    left: -14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--vermillion);
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .git-node .tag {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    color: var(--line);
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+  .git-node .name {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+    font-style: italic;
+  }
+  .cmd-block {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 18px 22px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+  }
+  .cmd-block .cmt { color: var(--vermillion-soft); }
+  .cmd-block .key { color: var(--ochre); }
+
+  /* ============ DECISION FOOTER ============ */
+  .decision {
+    margin-top: 80px;
+    text-align: center;
+    padding: 60px 40px;
+    border: 2.5px solid var(--ink);
+    background: var(--paper-warm);
+    position: relative;
+  }
+  .decision::before, .decision::after {
+    content: "";
+    position: absolute;
+    top: 14px; bottom: 14px;
+    width: 1.5px;
+    background: var(--ink);
+  }
+  .decision::before { left: 14px; }
+  .decision::after  { right: 14px; }
+
+  .decision h2 {
+    font-family: "Cormorant Garamond", serif;
+    font-size: 42px;
+    font-weight: 600;
+    font-style: italic;
+    color: var(--ink);
+    margin-bottom: 12px;
+    letter-spacing: -0.01em;
+  }
+  .decision p {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 15px;
+    color: var(--ink-soft);
+    max-width: 540px;
+    margin: 0 auto 28px;
+    line-height: 1.65;
+  }
+  .decision .options {
+    display: inline-flex;
+    gap: 24px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    color: var(--ink-mute);
+  }
+  .decision .options span {
+    border: 1.5px solid var(--ink);
+    padding: 10px 18px;
+    color: var(--ink);
+  }
+  .decision .options .ok {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  /* ============ FOOTER ============ */
+  .footer-stamp {
+    margin-top: 60px;
+    padding-top: 22px;
+    border-top: 1px solid var(--line-soft);
+    display: flex;
+    justify-content: space-between;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+  }
+
+  /* ============ MOTION ============ */
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .title-block, .stats, .section { animation: rise 0.8s cubic-bezier(0.2,0,0,1) both; }
+  .title-block { animation-delay: 0.05s; }
+  .stats { animation-delay: 0.15s; }
+  .section:nth-of-type(1) { animation-delay: 0.25s; }
+  .section:nth-of-type(2) { animation-delay: 0.35s; }
+  .section:nth-of-type(3) { animation-delay: 0.45s; }
+  .section:nth-of-type(4) { animation-delay: 0.55s; }
+  .section:nth-of-type(5) { animation-delay: 0.65s; }
+
+  /* mobile */
+  @media (max-width: 760px) {
+    .compare { grid-template-columns: 1fr; }
+    .compare-arrow { transform: rotate(90deg); padding: 16px 0; }
+    .compare-arrow .label { writing-mode: horizontal-tb; transform: none; }
+    .ext-grid { grid-template-columns: 1fr; }
+    .phase-body { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .stat { border-right: none; border-bottom: 1px solid var(--line-soft); }
+    .git-flow { grid-template-columns: 1fr; }
+    .git-node + .git-node::before { display: none; }
+    .risk-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <!-- HEADER STAMP -->
+  <div class="stamp-row">
+    <span class="stamp">VRAM-SAFE-BATCH / REFACTORING SPEC</span>
+    <span class="doc-id">DOC-Ⅷ · DRAFT</span>
+    <span class="stamp">2026-05-25 / FUKU-HIRO112</span>
+  </div>
+
+  <!-- TITLE -->
+  <header class="title-block">
+    <div class="title-section">SECTION VIII — RESPONSIBILITY SEPARATION</div>
+    <h1 class="title-main">分かつ、<em>四つの拡張へ。</em></h1>
+    <p class="title-sub">
+      <code style="font-family:'IBM Plex Mono',monospace;color:var(--vermillion);font-size:0.85em;">vram_safe_batch_v3b.py</code> ― 1075 行のモノリスを、機能の輪郭に沿って解きほぐし、独立した四つの Forge 拡張として再構築する設計図。
+    </p>
+  </header>
+
+  <!-- STATS -->
+  <section class="stats">
+    <div class="stat">
+      <div class="stat-label">From</div>
+      <div class="stat-value">1075<span class="unit">lines</span></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Into</div>
+      <div class="stat-value">4<span class="unit">extensions</span></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Phases</div>
+      <div class="stat-value">5<span class="unit">8-A → 8-E</span></div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Commits</div>
+      <div class="stat-value">~18<span class="unit">checkpoints</span></div>
+    </div>
+  </section>
+
+  <!-- ============ I. BEFORE / AFTER ============ -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">Ⅰ.</span>
+      <h2 class="section-title">現状と<em>到達点</em></h2>
+      <span class="section-marker">FIG-001</span>
+    </div>
+
+    <div class="compare">
+      <!-- BEFORE -->
+      <div class="panel panel-before">
+        <span class="panel-tag">Before · 現状</span>
+        <h3>The Monolith</h3>
+        <p class="meta">scripts/vram_safe_batch_v3b.py</p>
+        <ul>
+          <li>UI 構築（記法ヘルプ / 展開順 / シードモード / 履歴 / Variable Manager） <span class="lines">~600</span></li>
+          <li>FastAPI エンドポイント登録 + SSE + file watcher <span class="lines">~200</span></li>
+          <li>生成ループ（展開・履歴・VRAM・再開） <span class="lines">~200</span></li>
+          <li>起動時マイグレーション (history v2 / variables.json v1→v2) <span class="lines">~30</span></li>
+          <li>ヘルパー（履歴選択肢、df 整形、プレビュー計算） <span class="lines">~50</span></li>
+        </ul>
+      </div>
+
+      <!-- ARROW -->
+      <div class="compare-arrow">
+        <span class="label">分離</span>
+        <span class="arrow">→</span>
+        <span class="label">Separate</span>
+      </div>
+
+      <!-- AFTER -->
+      <div class="panel panel-after">
+        <span class="panel-tag">After · 設計</span>
+        <h3>Four Atelier Pieces</h3>
+        <p class="meta">scripts/{ ext }.py · 各拡張は独立して有効化可能</p>
+        <ul>
+          <li>prompt_expander ― 変数展開 + variables.json 同期 <span class="lines">AlwaysOn</span></li>
+          <li>vram_recycler ― 画像ごと VRAM 解放（トグル）<span class="lines">AlwaysOn</span></li>
+          <li>batch_resume ― 履歴・再開・シードモード <span class="lines">Script</span></li>
+          <li>text_replace ― Ctrl+F フローティングパネル <span class="lines">AlwaysOn</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ II. FOUR EXTENSIONS ============ -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">Ⅱ.</span>
+      <h2 class="section-title">四つの<em>拡張</em></h2>
+      <span class="section-marker">FIG-002</span>
+    </div>
+
+    <div class="ext-grid">
+
+      <article class="ext-card">
+        <span class="ext-num">i</span>
+        <div class="ext-type">AlwaysOn · 既存拡張に被せる</div>
+        <h4>Prompt Expander</h4>
+        <div class="ext-codename">scripts/prompt_expander.py</div>
+        <p class="ext-desc">
+          メインプロンプトの <code>$foo</code> 展開、ネガティブ自動展開、Variable Manager との同期 API。
+          dynamic-prompts と同じ AlwaysOn パターンで <code>p.all_prompts</code> を書き換え、どのバッチ方式でも有効化。
+        </p>
+        <div class="ext-details">
+          <strong>担当:</strong> expander / variables_store / pending_jobs<br>
+          <strong>移管 API:</strong> /sync_variables · /variables · /variables/events · /peek_jobs<br>
+          <strong>注意:</strong> dynamic-prompts と pyparsing で衝突 → UI 警告
+        </div>
+      </article>
+
+      <article class="ext-card">
+        <span class="ext-num">ii</span>
+        <div class="ext-type">AlwaysOn · UI トグル付き</div>
+        <h4>VRAM Recycler</h4>
+        <div class="ext-codename">scripts/vram_recycler.py</div>
+        <p class="ext-desc">
+          画像ごとに VRAM を解放。デフォルト OFF、UI チェックボックスで有効化。
+          batch count や X/Y/Z plot 等の Forge 標準バッチでも動作可能になる。
+        </p>
+        <div class="ext-details">
+          <strong>担当:</strong> vram_manager.free_vram() 呼出<br>
+          <strong>フック:</strong> postprocess_image<br>
+          <strong>規模:</strong> ~50 行（最小）
+        </div>
+      </article>
+
+      <article class="ext-card">
+        <span class="ext-num">iii</span>
+        <div class="ext-type">Script · 排他選択</div>
+        <h4>Batch Resume</h4>
+        <div class="ext-codename">scripts/batch_resume.py</div>
+        <p class="ext-desc">
+          履歴 v2、中断/再開フロー、シードモード（固定/連番）、展開順 UI（drag-sort）。
+          現 v3b の中核を担う。最終段階で v3b は deprecation スタブ化。
+        </p>
+        <div class="ext-details">
+          <strong>担当:</strong> history_v2 / progress / image_generator<br>
+          <strong>UI 名:</strong> 「VRAM Safe Batch v3b」→「Batch Resume」<br>
+          <strong>連携:</strong> prompt_expander が事前に prompt を変換
+        </div>
+      </article>
+
+      <article class="ext-card">
+        <span class="ext-num">iv</span>
+        <div class="ext-type">AlwaysOn · UI のみ + Pending-2 統合</div>
+        <h4>Text Replace</h4>
+        <div class="ext-codename">scripts/text_replace.py</div>
+        <p class="ext-desc">
+          メインプロンプト欄に被せる VSCode 風フローティングパネル。
+          <code>Ctrl+F</code> でトグル、<code>setSelectionRange</code> でハイライト、置換/一括置換/Undo。
+        </p>
+        <div class="ext-details">
+          <strong>担当:</strong> text_tools.py（既存ロジック流用）<br>
+          <strong>注入:</strong> Blocks.load(_js=...) パターン<br>
+          <strong>備考:</strong> Pending-2 をここで完了
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============ III. PHASE TIMELINE ============ -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">Ⅲ.</span>
+      <h2 class="section-title">段階的<em>移行計画</em></h2>
+      <span class="section-marker">FIG-003 · TIMELINE</span>
+    </div>
+
+    <div class="timeline">
+
+      <!-- Phase 8-A -->
+      <div class="phase">
+        <span class="phase-marker">A</span>
+        <div class="phase-head">
+          <span class="phase-id">PHASE 8-A</span>
+          <span class="phase-title">内部リファクタ（動作不変）</span>
+          <span class="phase-meta">
+            <span class="tag">5 commits</span>
+            <span class="tag">no behavior change</span>
+          </span>
+        </div>
+        <div class="phase-body">
+          <div>
+            <h5>新規モジュール</h5>
+            <ul>
+              <li>api_endpoints.py — _register_api / SSE / watcher</li>
+              <li>ui_builder.py — ui() の中身 (~600 行)</li>
+              <li>batch_runner.py — _run_internal の中身 (~200 行)</li>
+              <li>ui_helpers.py — _history_choices ほか</li>
+            </ul>
+            <h5 style="margin-top: 14px;">v3b.py</h5>
+            <ul>
+              <li>1075 行 → ~100 行に縮小</li>
+              <li>クラスシェルと callbacks 登録のみ</li>
+              <li>各処理は modules/ 配下へ委譲</li>
+            </ul>
+          </div>
+          <div>
+            <h5>動作確認</h5>
+            <div class="verify">
+              <div class="verify-label">L2 SCENARIO</div>
+              WebUI 起動 → v3b を選択して通常生成 → 変数展開 / 履歴 / Variable Manager 同期 / ADetailer 併用 / Hires.fix 併用がすべて既存と同じ挙動になることを確認。
+              <br><br>
+              <strong style="color:var(--vermillion);">L1:</strong> 既存 180/180 PASS 維持
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 8-B -->
+      <div class="phase">
+        <span class="phase-marker">B</span>
+        <div class="phase-head">
+          <span class="phase-id">PHASE 8-B</span>
+          <span class="phase-title">VRAM Recycler 分離</span>
+          <span class="phase-meta">
+            <span class="tag">2 commits</span>
+            <span class="tag">+ AlwaysOn UI</span>
+          </span>
+        </div>
+        <div class="phase-body">
+          <div>
+            <h5>変更</h5>
+            <ul>
+              <li>scripts/vram_recycler.py 新設（AlwaysOn）</li>
+              <li>UI: 「🧹 画像ごとに VRAM を解放」チェックボックス（default OFF）</li>
+              <li>postprocess_image で vram_manager.free_vram()</li>
+              <li>v3b 側の解放呼出を撤去（vram_recycler 任せ）</li>
+            </ul>
+          </div>
+          <div>
+            <h5>動作確認</h5>
+            <div class="verify">
+              <div class="verify-label">L2 SCENARIO</div>
+              チェック ON で batch count = 5 の txt2img 生成 → 各画像後に <code>[VRAM Recycler]</code> ログ。
+              X/Y/Z plot 等の標準バッチでも動作。<br>
+              <strong style="color:var(--vermillion);">確認:</strong> v3b 併用で二重解放しない
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 8-C -->
+      <div class="phase">
+        <span class="phase-marker">C</span>
+        <div class="phase-head">
+          <span class="phase-id">PHASE 8-C</span>
+          <span class="phase-title">Prompt Expander 分離</span>
+          <span class="phase-meta">
+            <span class="tag">4 commits</span>
+            <span class="tag">+ AlwaysOn 変数展開</span>
+          </span>
+        </div>
+        <div class="phase-body">
+          <div>
+            <h5>変更</h5>
+            <ul>
+              <li>scripts/prompt_expander.py 新設（AlwaysOn）</li>
+              <li>API /sync_variables /variables /variables/events /peek_jobs を移管</li>
+              <li>process フックで p.all_prompts を書き換え（dynamic-prompts と同パターン）</li>
+              <li>ネガティブ自動展開もこちら</li>
+              <li>v3b 自前の展開ロジックを撤去（事前変換に委ねる）</li>
+            </ul>
+          </div>
+          <div>
+            <h5>動作確認</h5>
+            <div class="verify">
+              <div class="verify-label">L2 SCENARIO</div>
+              Script 未選択（None）で <code>$char</code> を含むプロンプト + Generate → 変数展開で複数枚生成。<br>
+              batch_resume と併用しても二重展開しない。<br>
+              <strong style="color:var(--vermillion);">注意:</strong> dynamic-prompts 共存時は UI 警告
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 8-D -->
+      <div class="phase">
+        <span class="phase-marker">D</span>
+        <div class="phase-head">
+          <span class="phase-id">PHASE 8-D</span>
+          <span class="phase-title">Batch Resume 最終整理</span>
+          <span class="phase-meta">
+            <span class="tag">3 commits</span>
+            <span class="tag">+ rename</span>
+          </span>
+        </div>
+        <div class="phase-body">
+          <div>
+            <h5>変更</h5>
+            <ul>
+              <li>scripts/batch_resume.py 新設（v3b リネーム）</li>
+              <li>Script 表示名: 「VRAM Safe Batch v3b」→「Batch Resume」</li>
+              <li>残責務: 履歴 v2 / 中断・再開 / シードモード / 展開順 UI</li>
+              <li>vram_safe_batch_v3b.py は deprecation スタブとして残置</li>
+            </ul>
+          </div>
+          <div>
+            <h5>動作確認</h5>
+            <div class="verify">
+              <div class="verify-label">L2 SCENARIO</div>
+              Script ドロップダウンに「Batch Resume」表示 → 既存 v3b と同じ操作で履歴・再開・シードモード動作。<br>
+              prompt_expander との連携で展開が事前完了。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 8-E -->
+      <div class="phase">
+        <span class="phase-marker">E</span>
+        <div class="phase-head">
+          <span class="phase-id">PHASE 8-E</span>
+          <span class="phase-title">Text Replace 新設（Pending-2 統合）</span>
+          <span class="phase-meta">
+            <span class="tag">4 commits</span>
+            <span class="tag">+ Ctrl+F panel</span>
+          </span>
+        </div>
+        <div class="phase-body">
+          <div>
+            <h5>変更</h5>
+            <ul>
+              <li>scripts/text_replace.py 新設（AlwaysOn UI）</li>
+              <li>gr.Group + CSS で position:absolute フローティングパネル</li>
+              <li>JS: Ctrl+F トグル / Esc 閉じる / setSelectionRange でハイライト</li>
+              <li>置換ロジックは既存 text_tools.py を流用</li>
+              <li>Blocks.load(_js=...) で安全に JS 注入</li>
+            </ul>
+          </div>
+          <div>
+            <h5>動作確認</h5>
+            <div class="verify">
+              <div class="verify-label">L2 SCENARIO</div>
+              メインプロンプト欄にフォーカス + <code>Ctrl+F</code> → 右上にパネル表示。<br>
+              検索 / ジャンプ / 置換 / 一括置換 / Undo 動作。<br>
+              <code>Esc</code> で閉じる、ブラウザ標準 Ctrl+F とは textarea フォーカス時のみ衝突回避。
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ IV. RISK ============ -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">Ⅳ.</span>
+      <h2 class="section-title"><em>注意点</em>と回避策</h2>
+      <span class="section-marker">FIG-004 · CAUTION</span>
+    </div>
+
+    <div class="risk-grid">
+      <div class="risk-card">
+        <h5>dynamic-prompts との衝突</h5>
+        <p><strong>$varname=</strong> 構文と pyparsing が衝突。prompt_expander の UI で「dynamic-prompts は OFF 推奨」を明示。起動時に両方検出したら警告ログ。</p>
+      </div>
+      <div class="risk-card">
+        <h5>p.all_prompts 書き換えと ADetailer</h5>
+        <p>AlwaysOn 拡張同士の処理順序に注意。dynamic-prompts と同パターンを採用し、ADetailer / Hires.fix / forge-couple との<strong>併用 L2 シナリオ</strong>を毎 Phase で確認。</p>
+      </div>
+      <div class="risk-card">
+        <h5>Forge React で &lt;script&gt; が動かない</h5>
+        <p>Text Replace の JS 注入は <strong>Blocks.load(_js=…)</strong> 経由で。gr.HTML 内の script タグは innerHTML 経由で実行されないため避ける。</p>
+      </div>
+      <div class="risk-card">
+        <h5>ロールバック地点の管理</h5>
+        <p>各 Phase 完了時に <strong>git tag</strong>（<code>phase-8-a-done</code> など）を打つ。事故時は <code>git reset --hard &lt;tag&gt;</code> で即時復帰。</p>
+      </div>
+      <div class="risk-card">
+        <h5>AlwaysOn 拡張同士の連携</h5>
+        <p>prompt_expander / vram_recycler / text_replace が <strong>同一の p</strong> を共有。各拡張は自分の責務のみを変更し、他拡張の状態に依存しない設計を徹底。</p>
+      </div>
+      <div class="risk-card">
+        <h5>v3b 削除のタイミング</h5>
+        <p>Phase 8-D 完了直後の <strong>v3b 完全削除は危険</strong>。最低 1 週間 deprecation スタブとして残置し、ユーザー設定移行を確認してから削除。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ IV-bis. CURRENT FEATURE INVENTORY ============ -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">Ⅳ-bis.</span>
+      <h2 class="section-title">維持すべき<em>現状機能</em></h2>
+      <span class="section-marker">FIG-006 · INVENTORY</span>
+    </div>
+    <p style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:16px;color:var(--ink-soft);margin-bottom:24px;max-width:780px;">
+      ─ 動作不変が最優先。下記すべての機能が Phase 完了ごとに同じ挙動になることを毎回検証する。
+    </p>
+
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:24px;">
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:20px 24px;box-shadow:4px 4px 0 var(--shadow);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.22em;color:var(--vermillion);margin-bottom:8px;">CATEGORY A · UI</div>
+        <ul style="list-style:none;font-size:12.5px;line-height:1.6;">
+          <li>📖 記法・使い方 Accordion (8 サブセクション)</li>
+          <li>📂 途中再開 Accordion + 履歴ドロップダウン focus 動的再計算</li>
+          <li>履歴選択 → 詳細 Textbox 連動</li>
+          <li>📊 展開順 Dataframe + ▲▼×⟲ 並び替えボタン</li>
+          <li>「➕」追加 + 重複検出</li>
+          <li>「🔄 メインから取得」+「🔢 枚数プレビュー」</li>
+          <li>🎲 シードモード Radio (連番/固定)</li>
+          <li>「📥 Variable Manager → メイン Prompt に投入」 + ステータス表示</li>
+        </ul>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:20px 24px;box-shadow:4px 4px 0 var(--shadow);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.22em;color:var(--vermillion);margin-bottom:8px;">CATEGORY B · 生成ループ</div>
+        <ul style="list-style:none;font-size:12.5px;line-height:1.6;">
+          <li>変数定義ブロック解析 (<code>変数---</code> 〜 <code>---</code>)</li>
+          <li>インライン定義 / 複数行値定義</li>
+          <li><code>$name</code> 辞書駆動最長一致 + カンマ自動補完</li>
+          <li><code>//x;y//</code> インラインスロット alternation</li>
+          <li>多段展開 (最大 12 段、循環自動停止)</li>
+          <li><code>$</code> 自動 strip / 値前後 <code>;</code>/空白 strip</li>
+          <li>compute_seed (固定/連番) + initial_seed=-1 乱択</li>
+          <li>should_update_completed (中断時バンプ抑止)</li>
+          <li>image_generator.create_fresh_p (scripts/script_args 維持)</li>
+          <li>p.clear_prompt_cache() + vram_manager.free_vram()</li>
+          <li>ネガティブ自動展開 (collect/compose)</li>
+        </ul>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:20px 24px;box-shadow:4px 4px 0 var(--shadow);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.22em;color:var(--vermillion);margin-bottom:8px;">CATEGORY C · 履歴・再開</div>
+        <ul style="list-style:none;font-size:12.5px;line-height:1.6;">
+          <li>history_v2 (schema v2) の load/save</li>
+          <li>起動時に旧 schema を .bak.{ts} へリネーム</li>
+          <li>生成中の進捗 update (completed/total/status)</li>
+          <li>再開モード判定 (チェック ON + 履歴選択)</li>
+          <li>再開時に seed_mode / resolved_initial_seed 復元</li>
+          <li>skip_until 個まで生成スキップ</li>
+          <li>generation 設定 (width/height/cfg/steps/sampler) 復元</li>
+          <li>resume 時 used_variables を inline より優先</li>
+          <li>最大 5 件保持</li>
+        </ul>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:20px 24px;box-shadow:4px 4px 0 var(--shadow);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.22em;color:var(--vermillion);margin-bottom:8px;">CATEGORY D · API エンドポイント</div>
+        <ul style="list-style:none;font-size:12.5px;line-height:1.6;font-family:'IBM Plex Mono',monospace;">
+          <li>POST /set_jobs</li>
+          <li>GET /status</li>
+          <li>GET /peek_jobs</li>
+          <li>POST /sync_variables</li>
+          <li>GET /variables</li>
+          <li>GET /variables/events (SSE)</li>
+          <li>file watcher (1 秒間隔 mtime polling)</li>
+          <li>self-write 抑止 (_last_self_write_mtime)</li>
+          <li>CORSMiddleware</li>
+          <li>app.on_event("startup") で watcher 起動</li>
+        </ul>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:20px 24px;box-shadow:4px 4px 0 var(--shadow);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.22em;color:var(--vermillion);margin-bottom:8px;">CATEGORY E · Variable Manager JS</div>
+        <ul style="list-style:none;font-size:12.5px;line-height:1.6;">
+          <li>localStorage 自動同期 (debounce 500ms)</li>
+          <li>起動時 GET /variables で取り込み判定</li>
+          <li>SSE EventSource で外部編集を反映</li>
+          <li>updated_at last-write-wins マージ</li>
+          <li>入力時の禁止文字自動除去</li>
+          <li>同期ステータスバッジ (🟢🔵🟠🔴)</li>
+          <li>「🚀 Forge に送信」ボタン (builder → set_jobs)</li>
+        </ul>
+        <div style="margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--ink-mute);letter-spacing:0.1em;">※ §8 では JS は触らない</div>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:20px 24px;box-shadow:4px 4px 0 var(--shadow);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.22em;color:var(--vermillion);margin-bottom:8px;">CATEGORY F · テスト基盤</div>
+        <ul style="list-style:none;font-size:12.5px;line-height:1.6;">
+          <li><code style="font-family:'IBM Plex Mono'">tests/test_expander.py</code> (95)</li>
+          <li><code style="font-family:'IBM Plex Mono'">tests/test_variables_store.py</code> (45)</li>
+          <li><code style="font-family:'IBM Plex Mono'">tests/test_compute_seed.py</code> (9)</li>
+          <li><code style="font-family:'IBM Plex Mono'">tests/test_image_generator.py</code> (8)</li>
+          <li><code style="font-family:'IBM Plex Mono'">tests/test_should_update_completed.py</code> (4)</li>
+          <li><code style="font-family:'IBM Plex Mono'">tests/test_history_dropdown_focus.py</code> (7)</li>
+          <li><code style="font-family:'IBM Plex Mono'">tests/test_pending_jobs.py</code> (5)</li>
+          <li><code style="font-family:'IBM Plex Mono'">tests/test_history_v2.py</code> (7)</li>
+        </ul>
+        <div style="margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--vermillion);letter-spacing:0.05em;font-weight:600;">
+          目標: 全 Phase 通して 180/180 PASS 維持
+        </div>
+      </div>
+    </div>
+
+    <p style="margin-top:24px;font-size:13px;color:var(--ink-mute);text-align:right;font-family:'IBM Plex Mono',monospace;letter-spacing:0.05em;">
+      完全な機能 ID 一覧は <code>docs/phase8/implementation_playbook.md</code> を参照
+    </p>
+
+    <!-- ============ GENERATION LOOP I/O CONTRACTS ============ -->
+    <h3 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:28px;color:var(--ink);margin-top:48px;margin-bottom:8px;padding-top:24px;border-top:2px solid var(--ink);">
+      生成ループの<em>I/O 契約</em> ─ <span style="color:var(--vermillion);font-size:0.7em;">TDD で固定</span>
+    </h3>
+    <p style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:15px;color:var(--ink-soft);margin-bottom:20px;max-width:880px;">
+      ─ 過去に意図しない仕様変更が混入した経緯あり。下記関数の <strong>入出力シグネチャと挙動は仕様の正本</strong> として固定し、Phase 8 では「先にテストで I/O 契約を確認 → 実装は触らない」を徹底する。
+    </p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;">
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-01</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">expander.parse_main_prompt(text: str) → ParseResult</code>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          <strong>OUT:</strong> ParseResult(body, inline_vars, has_legacy_n_notation) ・<strong>純粋関数</strong> ・テスト 12 ケース
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-04</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">extract_used_variables(body, variables=None) → list[str]</code>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          variables 渡しなら<strong>辞書キー最長一致</strong>、無ければ正規表現 ・出現順/重複排除
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-07</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">expand_prompts(body, variables, order) → list[str]</code>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          スロット直積 → 変数置換 → 値内 <code>;</code><code>//</code> 再評価 ・最大 12 段多段展開 ・テスト 30+
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-09</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">load_variables(path) → dict[name → list[value]]</code>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          v1/v2 自動判別 ・ファイル無/破損で空 dict (例外投げない)
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-10</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">_strip_dollar_prefix(name)</code> <span style="color:var(--vermillion);font-family:'IBM Plex Mono',monospace;font-size:10px;">Hotfix-1</span>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          Manager の <code>$char</code> 形式を Forge 側で <code>char</code> に変換 ・<strong>冪等</strong>
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-11</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">_normalize_value(s)</code> <span style="color:var(--vermillion);font-family:'IBM Plex Mono',monospace;font-size:10px;">Hotfix-2</span>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          値前後の空白と <code>;</code> を除去 ・<strong>内部 <code>;</code> は保持</strong> (alt 区切り維持)
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-13</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">compute_seed(mode, seed, n) → int</code>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          <code>fixed</code>: seed そのまま / <code>sequential</code>: seed + (n-1) ・seed&lt;0 で <strong>ValueError</strong>
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-14</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">should_update_completed(success, interrupted) → bool</code>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          success かつ NOT interrupted のみ True ・中断時バンプ抑止 (§3)
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-16</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">create_fresh_p(original_p, prompt, neg=None)</code>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          <code>copy.copy(p)</code> + prompt 上書き ・<strong>scripts / script_args / hr_* 維持必須</strong>
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-17</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">generate_one(p, prompt, seed, neg) → (ok, result, interrupted)</code>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          create_fresh_p → process_images → Interrupt 判定 ・3-tuple 戻り
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-20/21</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">collect_negative_additions + compose_negative_prompt</code>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          body の <code>$foo</code> から negative 値を収集 → 元 negative に重複排除で追加
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:18px 22px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">GEN-18</div>
+        <code style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--ink);font-weight:600;">p.clear_prompt_cache() ※ループ前 1 回</code>
+        <p style="font-size:12px;color:var(--ink-soft);margin-top:6px;line-height:1.55;">
+          クラス共有 cached_c / cached_uc の初期化 ・複数プロンプト生成の崩れ対策
+        </p>
+      </div>
+    </div>
+
+    <!-- ============ VARIABLE LOOKUP CHAIN ============ -->
+    <h3 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:28px;color:var(--ink);margin-top:48px;margin-bottom:8px;padding-top:24px;border-top:2px solid var(--ink);">
+      変数呼出機構の<em>維持仕様</em>
+    </h3>
+    <p style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:15px;color:var(--ink-soft);margin-bottom:20px;max-width:880px;">
+      ─ ストレージ・呼出順・データ流は仕様の正本。意図せず変更すると Variable Manager や生成挙動が壊れる。<strong>より良い方法を提案する場合は必ずユーザーに確認して承認を取ること。</strong>
+    </p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;">
+
+      <!-- 読込チェーン -->
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:22px 26px;box-shadow:6px 6px 0 var(--shadow);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.22em;color:var(--line);margin-bottom:8px;font-weight:600;">VL-03 · 読込チェーン (Forge ← variables.json)</div>
+        <pre style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.7;color:var(--ink);background:transparent;white-space:pre-wrap;">vars/variables.json (schema v2)
+   ↓ open + json.load
+schema_version 判別 (v1 / v2)
+   ↓ v2
+walk_variables(categories)
+   ↓ 再帰 walk
+各 variable について:
+  ・<span style="color:var(--vermillion);">_strip_dollar_prefix(name)</span>   ← Hotfix-1
+  ・<span style="color:var(--vermillion);">_normalize_value(positive)</span>   ← Hotfix-2
+   ↓
+flat dict {name: [positive]}
+   ↓
+expander.expand_prompts に渡す
+   ↓
+_find_var_ref_at で <strong>$</strong> 位置から最長一致
+   ↓
+マッチ → 値で置換 / 無 → リテラル保持</pre>
+      </div>
+
+      <!-- 書込チェーン -->
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:22px 26px;box-shadow:6px 6px 0 var(--shadow);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.22em;color:var(--line);margin-bottom:8px;font-weight:600;">VL-04 · 書込チェーン (Manager → variables.json)</div>
+        <pre style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.7;color:var(--ink);background:transparent;white-space:pre-wrap;">Manager で変数編集
+   ↓ state.save() + debounce 500ms
+forge.js: syncToForgeNow()
+   ↓ POST /sync_variables
+v3b/prompt_expander ハンドラ
+   ↓ mode="replace", categories=tree
+save_variables_v2(path, tree)
+   ↓ 既存 → .bak.{ts} 退避
+_stamp_missing_updated_at で補完
+   ↓ json.dump → os.replace で原子置換
+_last_self_write_mtime 更新
+   ↓ (SSE self-loop 抑止)
+file watcher 検出はスキップ</pre>
+      </div>
+
+    </div>
+
+    <!-- VL-07: 変更禁止ルール -->
+    <div style="border-left:5px solid var(--vermillion);background:var(--paper-warm);padding:22px 28px;">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.2em;color:var(--vermillion);margin-bottom:10px;font-weight:600;">VL-07 · 変更禁止項目 (Phase 8 で勝手に変えてはならない)</div>
+      <ul style="font-size:13px;line-height:1.7;color:var(--ink-soft);padding-left:18px;">
+        <li><code style="font-family:'IBM Plex Mono',monospace;">vars/variables.json</code> の schema (<code>schema_version: 2</code>, <code>categories[].children[].variables[]</code> 入れ子)</li>
+        <li>変数エントリのフィールド名 (<code>name / positive / negative / updated_at / id</code>)</li>
+        <li><code>name</code> の <code>$</code> プレフィックス含む保存形式 (Manager 慣習、Forge 側で strip)</li>
+        <li>値末尾 <code>;</code> の strip ルール (Hotfix-2)</li>
+        <li><code>updated_at</code> の ISO8601 UTC 形式 (秒精度 + Z 末尾)</li>
+        <li>API URL パス (<code style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;">/vram_safe_batch/api/&#123;set_jobs|status|peek_jobs|sync_variables|variables|variables/events&#125;</code>)</li>
+        <li>SSE ペイロード形式 (<code>&#123;type: "external_change", mtime: float&#125;</code>)</li>
+        <li>file watcher の polling 間隔 (1.0 秒)</li>
+      </ul>
+      <div style="margin-top:14px;padding:12px 16px;background:rgba(200,58,31,0.08);border:1px solid var(--vermillion);">
+        <strong style="color:var(--vermillion);">改善提案がある場合の手順:</strong>
+        <ol style="font-size:12.5px;line-height:1.65;color:var(--ink-soft);margin-top:4px;padding-left:20px;">
+          <li>影響範囲を分析 (Manager / Forge / Migration 全部)</li>
+          <li>後方互換性の保証方法を提示</li>
+          <li><strong>ユーザーに確認して承認を取る</strong></li>
+          <li>その後にのみ実装</li>
+        </ol>
+        <p style="font-size:12px;color:var(--ink-mute);margin-top:8px;font-style:italic;">実装エージェントが独断で変更することを禁ずる。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ IV-ter. REGRESSION TEST STRATEGY ============ -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">Ⅳ-ter.</span>
+      <h2 class="section-title">回帰<em>テスト戦略</em></h2>
+      <span class="section-marker">FIG-007 · TEST</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:28px;">
+      <!-- L1 -->
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:24px 28px;box-shadow:6px 6px 0 var(--shadow);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.22em;color:var(--ochre);margin-bottom:8px;font-weight:600;">LEVEL 1 · UNIT TEST</div>
+        <h3 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:24px;color:var(--ink);margin-bottom:12px;">毎 Phase 必須コマンド</h3>
+        <div style="background:var(--ink);color:var(--paper);padding:14px 18px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.7;margin-bottom:14px;">
+python -m unittest discover tests<br>
+<span style="color:var(--vermillion-soft);"># 期待: Ran 180+ tests / OK</span>
+        </div>
+        <p style="font-size:13px;color:var(--ink-soft);">
+          torch 依存の <code>test_sdxl_cond_padding</code> は事前から FAIL のため除外して数える。
+          1 件でも回帰したら **即 Phase 開始前に reset**。
+        </p>
+      </div>
+
+      <!-- L2 -->
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:24px 28px;box-shadow:6px 6px 0 var(--shadow);">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.22em;color:var(--ochre);margin-bottom:8px;font-weight:600;">LEVEL 2 · WEBUI 実機</div>
+        <h3 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:24px;color:var(--ink);margin-bottom:12px;">12 シナリオ回帰チェック</h3>
+        <ol style="list-style:none;counter-reset:rscenario;font-size:13px;line-height:1.65;color:var(--ink-soft);">
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-01</span>
+            WebUI 起動 → エラー無し / API 登録ログ
+          </li>
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-02</span>
+            Script 選択 → UI 全表示 / Accordion 8 種
+          </li>
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-03</span>
+            <code>$char,masterpiece</code> + <code>変数--- $char = alice;bob ---</code> で 2 枚生成
+          </li>
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-04</span>
+            「🔄 メインから取得」→「🔢 枚数プレビュー」フロー
+          </li>
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-05</span>
+            シードモード「固定」で 2 枚同一シード
+          </li>
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-06</span>
+            シードモード「連番」+ seed=-1 で 1 回乱択 + 連番
+          </li>
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-07</span>
+            生成中 Interrupt → 履歴から再開 → 歯抜けなし
+          </li>
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-08</span>
+            Variable Manager で編集 → 500ms 内に json 更新
+          </li>
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-09</span>
+            外部エディタで json 編集 → 1〜2 秒で Manager に反映
+          </li>
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-10</span>
+            negative 設定変数 → 生成画像 infotext に追加
+          </li>
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-11</span>
+            ADetailer + Hires.fix 併用で各画像処理動作
+          </li>
+          <li style="counter-increment:rscenario;padding-left:32px;position:relative;">
+            <span style="position:absolute;left:0;top:0;width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--vermillion);letter-spacing:0.05em;">R-12</span>
+            sd-forge-couple 併用で領域別生成
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <div style="margin-top:24px;padding:18px 24px;background:rgba(184,134,42,0.08);border-left:4px solid var(--ochre);">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.22em;color:var(--ochre);margin-bottom:6px;font-weight:600;">RULE</div>
+      <p style="font-size:14px;color:var(--ink-soft);">
+        各 Phase 完了で <strong style="color:var(--ink);">L1 全件 PASS + R-01 〜 R-12 全件 OK</strong> を確認してからユーザー承認を得る。
+        1 つでも回帰したら <code>git reset --hard phase-X-start</code> で直前段階に戻す。
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ V-pre. SUPERPOWERS ============ -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">Ⅴ.</span>
+      <h2 class="section-title">Superpowers の<em>活用</em></h2>
+      <span class="section-marker">FIG-008 · TOOLING</span>
+    </div>
+
+    <p style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:17px;color:var(--ink-soft);margin-bottom:20px;max-width:780px;">
+      ─ 本プロジェクトに <code>superpowers@5.1.0</code> がインストール済み。本リファクタの各場面で実装エージェントが skill を呼び出す。
+    </p>
+
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-bottom:24px;">
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:16px 20px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--vermillion);margin-bottom:4px;">★ STAR USAGE</div>
+        <h5 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;color:var(--ink);margin-bottom:6px;">subagent-driven-development</h5>
+        <p style="font-size:12.5px;color:var(--ink-soft);">
+          Phase 8-A の各タスク (A1〜A5) を <strong>fresh subagent</strong> に渡して実装。
+          コンテキスト分離により高品質、メイン会話のコンテキストも温存。
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:16px 20px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--line);margin-bottom:4px;">WORKFLOW</div>
+        <h5 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;color:var(--ink);margin-bottom:6px;">writing-plans / executing-plans</h5>
+        <p style="font-size:12.5px;color:var(--ink-soft);">
+          詳細プラン (本ファイル + playbook.md) を <code>writing-plans</code> 形式で作成。
+          実装時は <code>executing-plans</code> でステップごとに進行。
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:16px 20px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--line);margin-bottom:4px;">QUALITY</div>
+        <h5 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;color:var(--ink);margin-bottom:6px;">test-driven-development</h5>
+        <p style="font-size:12.5px;color:var(--ink-soft);">
+          各 Phase の純粋関数は <strong>RED → GREEN → REFACTOR</strong> を徹底。
+          「テストが失敗するのを必ず確認してから実装」のルール。
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:16px 20px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--line);margin-bottom:4px;">EVIDENCE</div>
+        <h5 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;color:var(--ink);margin-bottom:6px;">verification-before-completion</h5>
+        <p style="font-size:12.5px;color:var(--ink-soft);">
+          「完了」と言う前に L2 シナリオ R-01〜R-12 を実機で実行して<strong>証拠を提示</strong>。
+          推測ではなくログ・出力ベースで判定。
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:16px 20px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--line);margin-bottom:4px;">DEBUG</div>
+        <h5 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;color:var(--ink);margin-bottom:6px;">systematic-debugging</h5>
+        <p style="font-size:12.5px;color:var(--ink-soft);">
+          Pending-1 (ADetailer + Hires.fix「同じ画像 2 枚」) の根本原因調査。
+          症状パッチではなく根本因に到達してから修正。
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:16px 20px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--line);margin-bottom:4px;">PARALLEL</div>
+        <h5 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;color:var(--ink);margin-bottom:6px;">using-git-worktrees</h5>
+        <p style="font-size:12.5px;color:var(--ink-soft);">
+          Phase 8-B (vram_recycler) と 8-E (text_replace) は依存関係が薄い。
+          worktree で並行実装すれば工期短縮可能。
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:16px 20px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--line);margin-bottom:4px;">REVIEW</div>
+        <h5 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;color:var(--ink);margin-bottom:6px;">requesting-code-review</h5>
+        <p style="font-size:12.5px;color:var(--ink-soft);">
+          各 Phase 完了時に <strong>subagent でコードレビュー</strong>を実施。
+          メインエージェントとは別の視点で品質チェック。
+        </p>
+      </div>
+
+      <div style="border:1.5px solid var(--ink);background:var(--paper-warm);padding:16px 20px;">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.18em;color:var(--line);margin-bottom:4px;">FINISH</div>
+        <h5 style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:18px;color:var(--ink);margin-bottom:6px;">finishing-a-development-branch</h5>
+        <p style="font-size:12.5px;color:var(--ink-soft);">
+          全 Phase 完了後の最終整理 / PR 作成 / develop マージ前のチェック。
+        </p>
+      </div>
+    </div>
+
+    <div style="background:var(--ink);color:var(--paper);padding:22px 28px;font-family:'IBM Plex Mono',monospace;font-size:11.5px;line-height:1.8;">
+<span style="color:var(--vermillion-soft);">// 推奨呼出フロー (各 Phase で)</span><br>
+[Phase 開始] superpowers:writing-plans (本ファイル参照)<br>
+&nbsp;&nbsp;<span style="color:var(--ochre);">↓</span><br>
+[各タスク] superpowers:subagent-driven-development<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--ochre);">↓ 子</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;superpowers:test-driven-development<br>
+&nbsp;&nbsp;&nbsp;&nbsp;superpowers:verification-before-completion<br>
+&nbsp;&nbsp;<span style="color:var(--ochre);">↓</span><br>
+[Phase 完了] superpowers:requesting-code-review<br>
+&nbsp;&nbsp;<span style="color:var(--ochre);">↓</span><br>
+git tag phase-X-done → ユーザー承認待ち
+    </div>
+  </section>
+
+  <!-- ============ VI. GIT MANAGEMENT ============ -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">Ⅵ.</span>
+      <h2 class="section-title">Git による<em>後戻り保証</em></h2>
+      <span class="section-marker">FIG-009 · ROLLBACK</span>
+    </div>
+
+    <div class="git-panel">
+      <h5 style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.2em;color:var(--ink-mute);margin-bottom:18px;">CHECKPOINT FLOW · 各 Phase 完了でタグを打つ</h5>
+
+      <div class="git-flow">
+        <div class="git-node">
+          <div class="tag">tag</div>
+          <div class="name">phase-8-a-done</div>
+        </div>
+        <div class="git-node">
+          <div class="tag">tag</div>
+          <div class="name">phase-8-b-done</div>
+        </div>
+        <div class="git-node">
+          <div class="tag">tag</div>
+          <div class="name">phase-8-c-done</div>
+        </div>
+        <div class="git-node">
+          <div class="tag">tag</div>
+          <div class="name">phase-8-d-done</div>
+        </div>
+        <div class="git-node">
+          <div class="tag">tag</div>
+          <div class="name">phase-8-e-done</div>
+        </div>
+      </div>
+
+      <div class="cmd-block">
+<span class="cmt"># 各 Phase 開始前に作業チェックポイント</span>
+git tag <span class="key">phase-8-a-start</span>
+
+<span class="cmt"># 1 機能ずつ細かくコミット (新規モジュール / 統合 / 動作確認)</span>
+git commit -m <span class="key">"refactor(8-A): api_endpoints.py を抽出"</span>
+git commit -m <span class="key">"refactor(8-A): ui_builder.py を抽出"</span>
+…
+
+<span class="cmt"># Phase 完了 → タグを打って次へ</span>
+git tag <span class="key">phase-8-a-done</span>
+
+<span class="cmt"># 事故時のロールバック</span>
+git reset --hard <span class="key">phase-8-a-done</span>     <span class="cmt"># 完了状態に戻す</span>
+git revert &lt;commit-hash&gt;            <span class="cmt"># 個別コミットを取り消す</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DECISION FOOTER ============ -->
+  <div class="decision">
+    <h2>承認、もしくは調整。</h2>
+    <p>
+      本設計図でよろしければ Phase 8-A から段階的に着手します。
+      各 Phase 完了で必ず WebUI を起動して動作確認 → ご承認をいただいてから次へ進みます。
+      事故発生時は <code>git reset --hard phase-X-done</code> で即時復帰可能です。
+    </p>
+    <div class="options">
+      <span class="ok">✓ APPROVE — 8-A から開始</span>
+      <span>⚙ ADJUST — スコープ調整</span>
+      <span>◷ DEFER — 後日に保留</span>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer-stamp">
+    <span>vram-safe-batch-forge / refactoring spec / §8</span>
+    <span>SHEET 1 OF 1</span>
+    <span>scale 1:1 · ink on paper</span>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>SD Variable Manager ⇄ vars/variables.json 同期 — 設計確認 v2</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --card: #fff;
+    --text: #1f2933;
+    --muted: #5c6773;
+    --accent: #2563eb;
+    --rec-bg: #eff6ff;
+    --rec-border: #93c5fd;
+    --rec-tag: #1d4ed8;
+    --warn-bg: #fef3c7;
+    --warn-border: #fcd34d;
+    --warn-tag: #b45309;
+    --done-bg: #f0fdf4;
+    --done-border: #86efac;
+    --done-tag: #15803d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); margin: 0; padding: 32px 16px;
+    font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo UI", system-ui, sans-serif;
+    line-height: 1.65;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+    color: #fff; border-radius: 12px; padding: 22px 26px; margin-bottom: 24px;
+    box-shadow: 0 4px 16px rgba(37,99,235,0.18);
+  }
+  header h1 { margin: 0 0 6px; font-size: 24px; font-weight: 700; }
+  header .sub { margin: 0; opacity: 0.92; font-size: 14px; }
+  .badge {
+    display: inline-block; background: #fbbf24; color: #78350f;
+    padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.05em; margin-left: 8px;
+  }
+  .intro {
+    background: #fff7ed; border-left: 5px solid #f97316; border-radius: 8px;
+    padding: 16px 20px; margin-bottom: 28px; font-size: 14px;
+  }
+  .card {
+    background: var(--card); border: 1px solid #e5e7eb; border-radius: 12px;
+    padding: 22px 26px; margin-bottom: 22px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .card h2 {
+    margin: 0 0 14px; padding-bottom: 10px; border-bottom: 2px solid #e5e7eb;
+    font-size: 19px; color: var(--accent); display: flex; align-items: baseline; gap: 10px;
+  }
+  .card h2 .qnum {
+    display: inline-block; width: 30px; height: 30px; border-radius: 50%;
+    background: var(--accent); color: #fff; text-align: center; line-height: 30px;
+    font-size: 14px; font-weight: 700;
+  }
+  .card h3 { margin: 14px 0 6px; font-size: 15px; color: var(--muted); }
+  .userans {
+    background: #ecfdf5; border-left: 4px solid #10b981; border-radius: 6px;
+    padding: 10px 14px; margin: 0 0 14px; font-size: 13.5px;
+  }
+  .userans .label {
+    display: inline-block; background: #10b981; color: #fff; padding: 2px 8px;
+    border-radius: 4px; font-size: 11px; font-weight: 700; margin-right: 8px;
+    letter-spacing: 0.05em;
+  }
+  .decision {
+    background: var(--rec-bg); border: 2px solid var(--rec-border); border-radius: 8px;
+    padding: 14px 18px; margin: 10px 0;
+  }
+  .decision h4 {
+    margin: 0 0 8px; color: var(--rec-tag); font-size: 14px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .example {
+    background: #1e293b; color: #e2e8f0; border-radius: 6px;
+    padding: 10px 14px; margin: 8px 0; font-family: "JetBrains Mono", Consolas, monospace;
+    font-size: 12.5px; line-height: 1.55; overflow-x: auto; white-space: pre;
+  }
+  .example .label {
+    color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 4px; font-family: inherit;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13.5px; }
+  th, td { padding: 8px 12px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; color: var(--muted); font-weight: 600; font-size: 12.5px; }
+  .impact {
+    background: var(--warn-bg); border-left: 4px solid var(--warn-border); border-radius: 6px;
+    padding: 12px 16px; margin: 10px 0; font-size: 13.5px;
+  }
+  .impact strong { color: var(--warn-tag); }
+  .risk {
+    background: #fef2f2; border-left: 4px solid #fca5a5; border-radius: 6px;
+    padding: 12px 16px; margin: 10px 0; font-size: 13.5px;
+  }
+  .risk strong { color: #b91c1c; }
+  code {
+    background: #f3f4f6; padding: 1px 6px; border-radius: 3px;
+    font-family: "JetBrains Mono", Consolas, monospace; font-size: 12.5px;
+  }
+  .arrow { color: var(--accent); font-weight: 700; }
+  .phase {
+    display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 11px;
+    font-weight: 600; letter-spacing: 0.04em;
+  }
+  .phase.now { background: var(--done-bg); color: var(--done-tag); border: 1px solid var(--done-border); }
+  .phase.next { background: var(--warn-bg); color: var(--warn-tag); border: 1px solid var(--warn-border); }
+  footer { text-align: center; color: var(--muted); font-size: 13px; padding: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>SD Variable Manager ⇄ vars/variables.json 同期 <span class="badge">v2 改訂版</span></h1>
+  <p class="sub">ご回答を反映: 常時同期 / 完全置換だが Forge 側追加も可能 / positive・negative フィールド分離 / ツリー構造保持 / 入力バリデーション強化</p>
+</header>
+
+<div class="intro">
+  <b>背景:</b> 「Manager で定義したら即 Forge から見える」状態を作る。<br>
+  v1 提案からの主な変更:
+  <ul style="margin: 6px 0;">
+    <li><b>Q1</b>: 「送信と同時」だけでなく、Manager の各種編集アクションで<b>都度同期</b>するモデルに変更</li>
+    <li><b>Q2</b>: 完全置換だが、<b>Forge 側からも variables.json を編集できるよう双方向化</b>の道筋を提示</li>
+    <li><b>Q3</b>: variables.json schema を <b>v2 に拡張</b>し positive/negative を分離して持つ</li>
+    <li><b>Q4</b>: <b>ツリー構造そのまま</b> JSON に保持（flatten しない）</li>
+    <li><b>補足</b>: 入力時点で使えない文字を<b>リアルタイムで弾く</b>バリデーション</li>
+  </ul>
+</div>
+
+<!-- Q1 -->
+<section class="card">
+  <h2><span class="qnum">1</span>同期タイミング: 常時同期モデル</h2>
+
+  <div class="userans">
+    <span class="label">回答</span>
+    各種編集アクション（変数作成・カテゴリ作成・移動・編集保存・削除）で同期させたい。常に同期状態を維持。
+  </div>
+
+  <div class="decision">
+    <h4>✓ 決定: アクションフック型・全自動同期 + debounce</h4>
+    <p>Manager 内のすべての書き込み系操作で <code>state.save()</code> が呼ばれている。
+    その <code>save()</code> 末尾に<b>「Forge に同期」を非同期で発火</b>するフックを追加すれば、追加 UI なしで「常時同期」が実現できる。</p>
+
+    <p>具体的に同期発火する操作（既に save() を呼んでいる箇所）:</p>
+    <ul>
+      <li>変数の追加・編集・削除（保存ボタン押下時）</li>
+      <li>カテゴリ・サブカテゴリの追加・リネーム・削除</li>
+      <li>変数のカテゴリ間移動（D&D）</li>
+      <li>カテゴリの並び替え（D&D）</li>
+      <li>Undo / Redo</li>
+      <li>Import / Merge Import 完了時</li>
+    </ul>
+
+    <p><b>debounce (500ms)</b> でまとめる: 連続編集で都度 HTTP を撃たない。
+    最後の編集から 500ms 静かになったら 1 回だけ POST。</p>
+  </div>
+
+  <h3>Forge 未起動時の挙動</h3>
+  <div class="example"><span class="label">同期失敗時のフロー</span>
+state.save()
+  ↓
+localStorage 書き込み (常に成功)
+  ↓
+queueSync() でデバウンス
+  ↓
+POST /sync_variables
+  ↓ [失敗]
+ヘッダーに ⚠ 「未同期 N 件」バッジ表示
+localStorage に "pending_sync: true" フラグ
+  ↓
+次回 Forge オンライン検知時 (起動・URL 変更時) に再送
+</div>
+
+  <h3>Manager 起動時の挙動（Forge 側変更があった場合の取り込み）</h3>
+  <p>Manager ページ読み込み時に <code>GET /variables</code> で Forge 側の最新を取得し、Manager の localStorage と比較。
+  差分があれば「Forge 側で変更があります。取り込みますか？」ダイアログ。</p>
+
+  <div class="impact">
+    <strong>使用感への影響:</strong>
+    <ul>
+      <li>+ 編集が即 Forge に反映、追加クリック不要</li>
+      <li>+ 「🚀 Forgeに送信」ボタンは<b>ビルダーテキスト送信のみ</b>に責任が縮小（変数定義は既に同期済み）</li>
+      <li>− Forge 未起動だと右上に「⚠ 未同期 N 件」バッジが常時表示される（うっとうしいと感じる可能性 → 設定で OFF にできるようにする）</li>
+      <li>− 編集後 500ms はネットワーク待ちが発生（無視できる程度）</li>
+    </ul>
+  </div>
+
+  <div class="risk">
+    <strong>リスクと回避:</strong>
+    <ul>
+      <li><b>競合（Manager と Forge 側で同時編集）</b>: Phase A では「Manager が常に正」(Manager の save が必ず勝つ)。Phase B で Forge 側に CRUD API を作る際に last-write-wins ロジックを導入</li>
+      <li><b>大量編集で debounce が効かないケース</b>: 500ms 後にまとめて 1 回だけ POST するため、典型的な編集パターンでは問題なし</li>
+    </ul>
+  </div>
+</section>
+
+<!-- Q2 -->
+<section class="card">
+  <h2><span class="qnum">2</span>既存エントリ: 完全置換 + 双方向同期の道筋</h2>
+
+  <div class="userans">
+    <span class="label">回答</span>
+    完全置換でいくが、<b>Forge 側からも変数定義を追加できるよう改修</b>したい。常に同期した状態を作る方針を提示してほしい。
+  </div>
+
+  <div class="decision">
+    <h4>✓ 決定: Phase A「Manager → Forge 完全置換 (片方向)」 → Phase B「Forge 側 CRUD API + Manager 取り込み (双方向)」</h4>
+  </div>
+
+  <h3><span class="phase now">Phase A (今フェーズ)</span> Manager → Forge 片方向、完全置換</h3>
+  <p>Manager の <code>state.save()</code> → <code>POST /sync_variables { mode: "replace", categories: [...] }</code>。
+  <code>variables.json</code> 全体を Manager の現状で上書き。</p>
+  <p>初回同期前は <code>vars/variables.json</code> を <code>vars/variables.json.bak.{timestamp}</code> に自動退避（過去のローカル定義を失わない保険）。</p>
+
+  <h3><span class="phase next">Phase B (将来)</span> Forge 側からも追加可能にする</h3>
+
+  <p>「Forge 側で variables.json に追加 → Manager に反映」を成立させる経路:</p>
+
+  <h4 style="font-size: 14px; color: var(--rec-tag); margin: 12px 0 4px;">案 B-1: Forge 側に CRUD UI を作らず、JSON 手動編集 + Manager 起動時取り込み</h4>
+  <p>ユーザーがエディタで <code>vars/variables.json</code> を直接編集 → Manager ページ再読み込み時に<b>「Forge 側が新しい」を検出</b>し、差分を Manager に取り込む。</p>
+  <div class="example"><span class="label">取り込みフロー</span>
+Manager 起動
+  ↓
+GET /variables          ← variables.json を取得
+  ↓
+Manager の localStorage と diff (両方が ETag/mtime を持つ)
+  ↓
+[Forge 側に新規/変更あり]
+  ↓
+ダイアログ:「Forge 側で 3 件追加されています。取り込みますか？」
+  ↓ Yes
+state.categories にマージ → state.save() → sync (循環防止のため取り込み時はフラグで sync 抑止)
+</div>
+
+  <h4 style="font-size: 14px; color: var(--rec-tag); margin: 12px 0 4px;">案 B-2: Forge UI に簡易 CRUD ボタン</h4>
+  <p>v3b の <code>📖 記法・使い方</code> に「変数を 1 件追加」「変数管理を開く」ボタンを追加。
+  押すと Manager ページを新規タブで開く or 簡易フォームを Forge 側に表示。
+  Phase B の中でもさらに先のフェーズ。</p>
+
+  <h3>双方向同期のための競合解決</h3>
+  <table>
+    <tr>
+      <th>状況</th>
+      <th>解決方針</th>
+    </tr>
+    <tr>
+      <td>Manager 編集 中に Forge 側 が変わった</td>
+      <td>save() 時に「Forge 側が新しい。上書き? 取り込み?」ダイアログ</td>
+    </tr>
+    <tr>
+      <td>同名変数が両側にある（content 違い）</td>
+      <td>last-write-wins（updated_at を比較、後勝ち）</td>
+    </tr>
+  </table>
+
+  <div class="impact">
+    <strong>使用感への影響:</strong>
+    <ul>
+      <li>+ Phase A 完了時点で「Manager 編集 → 即 Forge 反映」が常に成立</li>
+      <li>+ Phase B 完了時点で「Forge 側手編集 → Manager に取り込み」も可能</li>
+      <li>− Phase A 中は Forge 側の手編集は次回 Manager save 時に消える（バックアップから復旧は可能）</li>
+    </ul>
+  </div>
+</section>
+
+<!-- Q3 -->
+<section class="card">
+  <h2><span class="qnum">3</span>positive / negative フィールド分離 (schema v2)</h2>
+
+  <div class="userans">
+    <span class="label">回答</span>
+    JSON でフィールドを分ければよい。Forge 側の変数読み込み処理を変える必要はあると認識。
+  </div>
+
+  <div class="decision">
+    <h4>✓ 決定: variables.json schema を v2 に拡張、positive/negative を分離して持つ</h4>
+  </div>
+
+  <h3>新スキーマ (v2)</h3>
+  <div class="example"><span class="label">vars/variables.json schema v2</span>
+{
+  "schema_version": 2,
+  "categories": [
+    {
+      "name": "characters",
+      "children": [
+        {
+          "name": "pokemon",
+          "variables": [
+            {
+              "name": "ナンジャモ_ジム_雷_",
+              "positive": "iono_(pokemon), pokemon, 1girl, pink_eyes",
+              "negative": "",
+              "updated_at": "2026-05-24T10:30:00Z"
+            },
+            {
+              "name": "カミツレ_ジム_電気_",
+              "positive": "elesa_(pokemon), pokemon",
+              "negative": "low quality, bad anatomy"
+            }
+          ]
+        }
+      ],
+      "variables": []
+    }
+  ]
+}
+</div>
+
+  <h3>Forge expander 側の変更</h3>
+  <p><code>variables_store.load_variables()</code> を schema v2 対応に拡張:</p>
+  <div class="example"><span class="label">load_variables の挙動 (改修後)</span>
+def load_variables(path):
+    data = json.load(...)
+
+    if data["schema_version"] == 1:
+        # 既存 v1 互換: values → positive のみ展開
+        return {
+            "positive": flatten(data["variables"]),
+            "negative": {},
+        }
+
+    if data["schema_version"] == 2:
+        # ツリーを walk して flat dict にする
+        positive_dict = {}
+        negative_dict = {}
+        for var in walk_tree(data["categories"]):
+            positive_dict[var["name"]] = [var.get("positive", "")]
+            if var.get("negative"):
+                negative_dict[var["name"]] = [var["negative"]]
+        return { "positive": positive_dict, "negative": negative_dict }
+</div>
+
+  <p><code>expander.expand_prompts()</code> はメインプロンプト展開で <code>positive_dict</code> のみ参照。
+  ネガティブプロンプト展開（将来 v3b で対応）は <code>negative_dict</code> を参照する設計。</p>
+
+  <h3>$!foo 構文の扱い</h3>
+  <p>Manager 側に既に <code>$!foo</code> 表記があるが、schema v2 では <b>1 変数に positive/negative 両方が入る</b>ので、<code>$!foo</code> という別変数概念は不要になる。
+  既存の <code>$!foo</code> エントリは migration で <code>{name: "foo", negative: "..."}</code> 形式の対応する変数に統合（または negative-only 変数として name そのままで保存）。</p>
+
+  <div class="impact">
+    <strong>使用感への影響:</strong>
+    <ul>
+      <li>+ 1 つの変数に positive と negative がペアで持てる（管理しやすい）</li>
+      <li>+ ネガティブプロンプトへの流入経路を将来 v3b に組み込む布石になる</li>
+      <li>− schema v1 → v2 migration が必要（既存 variables.json は自動で <code>.bak</code> 退避してから v2 形式で再保存）</li>
+      <li>− 既存メインプロンプト中の <code>$!foo</code> 参照は手動修正必要（migration ログで一覧表示）</li>
+    </ul>
+  </div>
+</section>
+
+<!-- Q4 -->
+<section class="card">
+  <h2><span class="qnum">4</span>カテゴリ階層: 単一ツリー JSON vs フォルダ分割複数 JSON</h2>
+
+  <div class="userans">
+    <span class="label">回答</span>
+    Manager の階層を JSON 内のツリーで持つのではなく、<b>vars/ フォルダ配下にカテゴリごとに JSON ファイルを分割</b>する案ではどうか。両案を保守性の観点で比較してほしい（Forge 側読み取り改修も含めて）。
+  </div>
+
+  <h3>2 つの案の具体的なディスク構造</h3>
+
+  <div class="example"><span class="label">案 P (Plan): 単一ツリー JSON（v2 案）</span>
+vars/
+  variables.json          ← 1 ファイルにツリー全体
+
+# 中身:
+{
+  "schema_version": 2,
+  "categories": [
+    {"name": "characters", "children": [
+      {"name": "pokemon", "variables": [{"name": "nanjamo", ...}]}
+    ]},
+    {"name": "outfits", "variables": [...]}
+  ]
+}
+</div>
+
+  <div class="example"><span class="label">案 F (Folder): フォルダ分割複数 JSON（ご提案案）</span>
+vars/
+  characters/
+    pokemon.json          ← {"variables": [{"name": "nanjamo", ...}]}
+    aether.json
+  outfits/
+    school.json
+    casual.json
+  moods.json              ← トップ直下に置く変数
+
+# pokemon.json の中身（例）:
+{
+  "schema_version": 2,
+  "variables": [
+    {"name": "nanjamo", "positive": "iono_(pokemon)", "negative": ""}
+  ]
+}
+</div>
+
+  <h3>保守性 7 観点での比較</h3>
+  <table>
+    <tr>
+      <th style="width: 22%;">観点</th>
+      <th>案 P: 単一ツリー JSON</th>
+      <th>案 F: フォルダ分割複数 JSON</th>
+    </tr>
+    <tr>
+      <td><b>① 手編集のしやすさ</b></td>
+      <td>変数 100 件超になると 1 ファイルが長大、目的の変数を探しにくい</td>
+      <td style="background:#ecfdf5;"><b>○ カテゴリ単位で小さなファイル</b>、目的の変数にすぐ到達</td>
+    </tr>
+    <tr>
+      <td><b>② Git diff の可読性</b></td>
+      <td>どこか 1 変数を編集しても <code>variables.json</code> の差分に全て載る → ノイズ多い</td>
+      <td style="background:#ecfdf5;"><b>○ 編集したカテゴリのファイルだけ変わる</b>、レビューしやすい</td>
+    </tr>
+    <tr>
+      <td><b>③ Forge 側読み取り実装量</b></td>
+      <td style="background:#ecfdf5;"><b>○ json.load 1 回 + ツリー walk</b> = ~30 行</td>
+      <td><code>os.walk(vars/)</code> で再帰、各ファイル load、同名変数の重複検出、フォルダ名 = カテゴリ名 のマッピング = <b>~100 行</b></td>
+    </tr>
+    <tr>
+      <td><b>④ 同期 API 実装量</b></td>
+      <td style="background:#ecfdf5;"><b>○ POST /sync_variables で 1 ファイル全置換</b> + 自動 backup ＝ atomic</td>
+      <td>「どのファイルを書き換えるか」「不要になったファイルを削除」「フォルダ rename / 作成」を全部実装。atomic 化のために tmp ディレクトリ書き → リネームが必要</td>
+    </tr>
+    <tr>
+      <td><b>⑤ カテゴリ rename / 移動の処理</b></td>
+      <td style="background:#ecfdf5;"><b>○ JSON 内の name フィールド書き換え 1 行</b></td>
+      <td>フォルダ rename API が必要。OS 側で開いているエディタがあるとロック、Windows と Linux で挙動差。<b>file watcher との競合リスク</b></td>
+    </tr>
+    <tr>
+      <td><b>⑥ Manager → Forge 同期の通信量</b></td>
+      <td>差分なしでも全 categories ツリーを POST（数 KB〜数十 KB）</td>
+      <td style="background:#ecfdf5;"><b>○ 編集された 1 ファイル分だけ POST 可能</b>（差分同期向き）。ただし「Manager 側が差分検出する」or「Forge 側がツリー受領 → 必要ファイルのみ書き換え」のロジック追加要</td>
+    </tr>
+    <tr>
+      <td><b>⑦ バックアップ / リストア</b></td>
+      <td style="background:#ecfdf5;"><b>○ 1 ファイルを <code>.bak.{ts}</code> にコピーで完了</b></td>
+      <td><code>vars/</code> ディレクトリ全体を tar/zip で退避。リストア時に既存ファイルとの差分処理が要る</td>
+    </tr>
+  </table>
+
+  <h3>定量的な実装工数見積（Forge 側 + Manager 側）</h3>
+  <table>
+    <tr>
+      <th>項目</th>
+      <th>案 P</th>
+      <th>案 F</th>
+    </tr>
+    <tr>
+      <td><code>variables_store.py</code> 改修</td>
+      <td>~50 行 (load/save/migration)</td>
+      <td>~150 行 (recursive walk, per-file io, conflict detect, atomic dir rename)</td>
+    </tr>
+    <tr>
+      <td><code>_register_api</code> の同期エンドポイント</td>
+      <td>~20 行 (POST 1 個 + backup)</td>
+      <td>~80 行 (POST + per-file diff + folder CRUD)</td>
+    </tr>
+    <tr>
+      <td>Manager 側 sync ロジック</td>
+      <td>~30 行 (whole-tree POST)</td>
+      <td>~70 行 (per-category diff 計算)</td>
+    </tr>
+    <tr>
+      <td>新規テスト</td>
+      <td>~5 ケース</td>
+      <td>~15 ケース (各種 FS 操作 / 競合 / 名前衝突)</td>
+    </tr>
+    <tr style="background: #f3f4f6;">
+      <td><b>合計コード行数（概算）</b></td>
+      <td><b>~100 行</b></td>
+      <td><b>~300 行（3 倍）</b></td>
+    </tr>
+  </table>
+
+  <h3>使用感（手編集視点）の比較</h3>
+  <table>
+    <tr>
+      <th>シナリオ</th>
+      <th>案 P での操作</th>
+      <th>案 F での操作</th>
+    </tr>
+    <tr>
+      <td>「pokemon カテゴリの 1 変数を直したい」</td>
+      <td>vscode で variables.json 開く → ファイル内検索 → 編集</td>
+      <td style="background:#ecfdf5;">vscode で <code>vars/characters/pokemon.json</code> を直接開く</td>
+    </tr>
+    <tr>
+      <td>「friend にカテゴリ単位で共有したい」</td>
+      <td>variables.json 内の該当カテゴリ部分を切り出して送付</td>
+      <td style="background:#ecfdf5;"><code>pokemon.json</code> を 1 つコピーして送付</td>
+    </tr>
+    <tr>
+      <td>「カテゴリの全変数を一括削除したい」</td>
+      <td style="background:#ecfdf5;">Manager で右クリック → 削除（自動同期）</td>
+      <td>Manager で削除（同上）。手で消すなら <code>pokemon.json</code> を <code>rm</code></td>
+    </tr>
+    <tr>
+      <td>「全変数を別マシンに移したい」</td>
+      <td style="background:#ecfdf5;"><code>variables.json</code> を 1 つコピー</td>
+      <td><code>vars/</code> ディレクトリごとコピー</td>
+    </tr>
+  </table>
+
+  <div class="decision">
+    <h4>✓ 私の推奨: 案 P（単一ツリー JSON）</h4>
+    <p>理由:</p>
+    <ol>
+      <li><b>実装工数が約 1/3</b>（300 行 → 100 行）。バグの混入リスクも低い</li>
+      <li><b>atomic 操作が容易</b>。1 ファイル書き換えなら部分失敗の心配なし。案 F は「フォルダ rename 中にクラッシュ → 中途半端な状態」というケースを考慮する必要あり</li>
+      <li><b>常時同期との相性が良い</b>: Manager の <code>state.save()</code> 1 回 = ファイル 1 回書き換え。<b>500ms debounce が単純に効く</b></li>
+      <li>手編集のしやすさという案 F の主要メリットは、<b>変数管理 HTML を直接使えば不要</b>（手編集する場面が少ない）</li>
+    </ol>
+    <p>変数数が <b>1000 を超えるような規模</b>になったら案 F に移行する余地は残しつつ、Phase A は案 P で開始。</p>
+  </div>
+
+  <div class="impact">
+    <strong>案 P で進めた場合の使用感への影響:</strong>
+    <ul>
+      <li>+ Manager で編集 → 500ms 後に variables.json 全置換 ＝ 単純で予測可能</li>
+      <li>+ バックアップは <code>variables.json.bak.{ts}</code> 1 ファイルで完結</li>
+      <li>− 変数 100 件超で variables.json が「縦に長いファイル」になる（IDE のアウトライン機能でカテゴリにジャンプ可能）</li>
+      <li>− 友人にカテゴリ単位で共有する場合は手で切り出す必要あり（将来「カテゴリ Export」機能を Manager に追加する余地あり）</li>
+    </ul>
+  </div>
+
+  <div class="risk">
+    <strong>仮に案 F を選んだ場合のリスク:</strong>
+    <ul>
+      <li>フォルダ rename API のクロスプラットフォーム挙動（Windows のファイルロック / Linux の inode 挙動）</li>
+      <li>同名変数が異なるカテゴリ内に存在する場合の競合検出ロジック</li>
+      <li>file watcher（将来 Forge 側で自動リロード機能を入れる場合）で大量のイベント発火</li>
+      <li>Atomic を保証するための tmp ディレクトリ → renamedir 手順の信頼性</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 補足 -->
+<section class="card">
+  <h2><span class="qnum">＋</span>変数名バリデーション: 入力時点で弾く</h2>
+
+  <div class="userans">
+    <span class="label">回答</span>
+    使える文字列が異なるなら、そもそも入力できないようにしてほしい。
+  </div>
+
+  <div class="decision">
+    <h4>✓ 決定: Manager 側の入力フォームで<b>リアルタイム入力制限</b> + Forge expander と<b>同一文字種ルール</b>に統一</h4>
+  </div>
+
+  <h3>許容文字の統一仕様</h3>
+  <table>
+    <tr>
+      <th></th>
+      <th>許容文字</th>
+      <th>備考</th>
+    </tr>
+    <tr>
+      <td>先頭 1 文字</td>
+      <td>非数字の word 文字（英字 / ひらがな / カタカナ / 漢字 / <code>_</code>）</td>
+      <td>Forge expander の <code>[^\W\d]</code> と一致</td>
+    </tr>
+    <tr>
+      <td>2 文字目以降</td>
+      <td>word 文字 + <code>( ) : 、</code></td>
+      <td>Forge expander の <code>[^=\s;,\$]</code> と一致</td>
+    </tr>
+    <tr>
+      <td>禁止文字（入力時に弾く）</td>
+      <td>半角スペース / 改行 / <code>=</code> / <code>;</code> / <code>,</code> / <code>$</code> / <code>/</code> / <code>{</code> <code>}</code> / <code>[</code> <code>]</code> / <code>.</code> / <code>|</code></td>
+      <td>SD プロンプト構文の予約文字 + Forge 区切り文字</td>
+    </tr>
+  </table>
+
+  <h3>Manager 側 UI 実装</h3>
+  <div class="example"><span class="label">変数追加・編集モーダルの input</span>
+&lt;input type="text" id="varName"
+  pattern="^[^\W\d][\w()：、:()]*$"
+  oninput="validateVarName(this)"
+  placeholder="$char, $ナンジャモ(ジム:雷) など"&gt;
+
+function validateVarName(input) {
+  const FORBIDDEN = /[/;{}\[\].,=|\s\$]/g;
+  if (FORBIDDEN.test(input.value)) {
+    input.setCustomValidity('使用できない文字: / ; { } [ ] . , = | スペース $');
+    input.reportValidity();
+    // 自動削除（ペースト時にも対応）
+    input.value = input.value.replace(FORBIDDEN, '');
+  } else {
+    input.setCustomValidity('');
+  }
+}
+</div>
+
+  <h3>既存の自動置換 (_migrateVariableNamesV2) との関係</h3>
+  <p>v1 から残っている <code>_migrateVariableNamesV2</code>（<code>(</code> <code>:</code> なども <code>_</code> に置換していた）は<b>過剰</b>になる。
+  Forge 側が <code>( ) : 、</code> を許すなら、Manager 側も同じく許して<b>置換ではなく許容</b>に変更。
+  既存ユーザーの変換済みデータはそのまま保持し、新規入力では <code>(</code> 等を許可。</p>
+
+  <div class="impact">
+    <strong>使用感への影響:</strong>
+    <ul>
+      <li>+ 入力時点で「使えない文字を打ったら入力されない」明確なフィードバック</li>
+      <li>+ Manager で書ける名前 = Forge で参照できる名前、で完全一致</li>
+      <li>+ <code>$ナンジャモ(ジム:雷)</code> のような表現力の高い名前が Manager でも使える</li>
+      <li>− 既存ユーザーの「v2 migration で <code>_</code> 置換済み」変数は手動で名前を戻したい場合あり（オプション機能として「逆 migration ツール」を提供することも検討可）</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 想定 API・スキーマ全体像 -->
+<section class="card">
+  <h2><span class="qnum">＝</span>確定すると出来上がる API・データの全体像</h2>
+
+  <h3>新規 API (Phase A)</h3>
+  <table>
+    <tr>
+      <th>エンドポイント</th><th>用途</th>
+    </tr>
+    <tr>
+      <td><code>POST /vram_safe_batch/api/sync_variables</code></td>
+      <td>Manager の全変数定義を受信し、<code>variables.json</code> に書き出し（完全置換、自動バックアップあり）</td>
+    </tr>
+    <tr>
+      <td><code>GET /vram_safe_batch/api/variables</code></td>
+      <td>現在の <code>variables.json</code> を JSON で返す（Manager 起動時取り込み・整合性チェック用）</td>
+    </tr>
+  </table>
+
+  <h3>Manager 側 state.js / forge.js の変更ポイント</h3>
+  <div class="example"><span class="label">state.js: save() フック追加</span>
+save() {
+  // 既存: localStorage 書き込み
+  localStorage.setItem('sd_variable_manager', JSON.stringify({...}));
+
+  // 新規: debounce 同期
+  queueSyncToForge();
+}
+
+function queueSyncToForge() {
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(() => syncToForgeNow(), 500);
+}
+
+async function syncToForgeNow() {
+  const payload = { mode: 'replace', categories: state.categories };
+  try {
+    const r = await fetch(`${getForgeUrl()}/vram_safe_batch/api/sync_variables`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (r.ok) { updateSyncBadge('ok'); }
+    else      { updateSyncBadge('error'); }
+  } catch (e) {
+    updateSyncBadge('offline');
+    localStorage.setItem('sd_vm_pending_sync', '1');
+  }
+}
+</div>
+
+  <h3>Forge 側 (Phase A)</h3>
+  <div class="example"><span class="label">scripts/vram_safe_batch_v3b.py の _register_api 拡張</span>
+@app.post("/vram_safe_batch/api/sync_variables")
+async def sync_variables(request: Request):
+    body = await request.json()
+    categories = body.get("categories", [])
+    mode = body.get("mode", "replace")
+
+    if mode == "replace":
+        # 既存 variables.json をバックアップ
+        variables_store.backup_if_exists(_variables_path())
+        # ツリー構造をそのまま v2 で保存
+        variables_store.save_variables_v2(_variables_path(), categories)
+    # ... merge モードは Phase B で実装
+
+    return JSONResponse({"status": "ok", "categories_saved": len(categories)})
+
+@app.get("/vram_safe_batch/api/variables")
+async def get_variables():
+    return JSONResponse(variables_store.load_raw_v2(_variables_path()))
+</div>
+
+  <h3>段階的ロードマップ</h3>
+  <table>
+    <tr><th>フェーズ</th><th>内容</th><th>完了条件</th></tr>
+    <tr>
+      <td><span class="phase now">Phase A</span></td>
+      <td>
+        <ul>
+          <li>variables_store schema v2 対応 + v1→v2 migration</li>
+          <li>POST /sync_variables / GET /variables 追加</li>
+          <li>Manager state.save() に debounce 同期フック</li>
+          <li>Manager 入力フォームの文字種バリデーション</li>
+          <li>Manager 右上に同期ステータスバッジ</li>
+        </ul>
+      </td>
+      <td>Manager 編集 → 500ms 以内に Forge 反映</td>
+    </tr>
+    <tr>
+      <td><span class="phase next">Phase B</span></td>
+      <td>
+        <ul>
+          <li>Manager 起動時の Forge → Manager 取り込みダイアログ</li>
+          <li>updated_at ベースの競合解決</li>
+          <li>必要なら Forge 側 簡易 CRUD UI</li>
+        </ul>
+      </td>
+      <td>双方向同期成立</td>
+    </tr>
+    <tr>
+      <td><span class="phase next">Phase C</span></td>
+      <td>ネガティブプロンプト流入経路の v3b 側対応（negative フィールド活用）</td>
+      <td>v3b で $foo の negative 部分が自動でネガティブ欄にも反映</td>
+    </tr>
+  </table>
+</section>
+
+<footer>
+  本案で OK であれば Phase A の実装プランに進みます。修正したい点があればお知らせください。
+</footer>
+
+</div>
+</body>
+</html>

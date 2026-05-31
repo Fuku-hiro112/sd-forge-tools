@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Phase 8-F — Text Replace 純JS化 実装プラン</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f4ecd8;--paper-warm:#efe5cd;--ink:#1a2a3f;--ink-soft:#2c3e54;--ink-mute:#5d6e82;
+    --line:#2c5f8d;--line-faint:rgba(44,95,141,0.12);--line-soft:rgba(44,95,141,0.28);
+    --vermillion:#c83a1f;--green:#4a7c59;--ochre:#b8862a;--shadow:rgba(26,42,63,0.12);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--paper);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:15px;line-height:1.62;
+    background-image:linear-gradient(var(--line-faint) 1px,transparent 1px),linear-gradient(90deg,var(--line-faint) 1px,transparent 1px);background-size:24px 24px}
+  .frame{max-width:1180px;margin:0 auto;padding:36px 32px 100px}
+  .stamp-row{display:flex;justify-content:space-between;border-bottom:1px solid var(--line-soft);padding-bottom:8px;margin-bottom:26px;
+    font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--ink-mute)}
+  .doc-id{border:1.5px solid var(--vermillion);color:var(--vermillion);padding:3px 10px;font-weight:600;letter-spacing:0.22em}
+  .title-block{padding-bottom:24px;margin-bottom:44px;border-bottom:2px solid var(--ink)}
+  .title-section{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:0.3em;color:var(--ink-mute);margin-bottom:8px}
+  .title-section::before{content:"§8-F ─── ";color:var(--vermillion);font-weight:600}
+  h1{font-family:"Cormorant Garamond",Georgia,serif;font-weight:600;font-size:clamp(38px,5.5vw,68px);line-height:1;letter-spacing:-0.015em;margin-bottom:12px}
+  h1 em{font-style:italic;color:var(--vermillion)}
+  .lede{font-family:"Cormorant Garamond",serif;font-style:italic;font-size:19px;color:var(--ink-soft);max-width:800px;line-height:1.5}
+  .section{margin-bottom:48px}
+  .section-head{display:flex;align-items:baseline;gap:14px;margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid var(--line-soft)}
+  .section-num{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:0.2em;color:var(--vermillion);font-weight:600}
+  .section-title{font-family:"Cormorant Garamond",serif;font-size:28px;font-weight:600}
+  .section-title em{font-style:italic;color:var(--ink-mute)}
+  p{margin-bottom:12px}
+  code{font-family:"IBM Plex Mono",monospace;font-size:0.88em;background:rgba(44,95,141,0.09);padding:1px 6px;border-radius:2px;color:var(--ink)}
+  .card{background:var(--paper-warm);border:1.5px solid var(--ink);padding:20px 24px;box-shadow:5px 5px 0 var(--shadow);margin-bottom:18px}
+  /* decided */
+  .decided{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+  .decided .pill{background:var(--paper-warm);border-left:4px solid var(--green);padding:12px 16px}
+  .decided .pill .k{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:4px}
+  .decided .pill .v{font-size:15px;font-weight:600;color:var(--green)}
+  .decided .pill .n{font-size:12.5px;color:var(--ink-soft);margin-top:4px}
+  /* 3 features */
+  .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:8px}
+  .feat{background:var(--paper-warm);border:1.5px solid var(--ink);padding:18px 20px 20px;box-shadow:4px 4px 0 var(--shadow);position:relative}
+  .feat .num{position:absolute;top:-12px;left:16px;background:var(--paper);border:1.5px solid var(--vermillion);color:var(--vermillion);width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:"Cormorant Garamond",serif;font-style:italic;font-weight:600;font-size:16px}
+  .feat h4{font-family:"Cormorant Garamond",serif;font-size:20px;font-weight:600;margin:8px 0 6px}
+  .feat .now{font-size:12px;color:var(--vermillion);margin-bottom:6px;font-family:"IBM Plex Mono",monospace}
+  .feat .how{font-size:13px;color:var(--ink-soft);line-height:1.5}
+  /* flow */
+  .flow{font-family:"IBM Plex Mono",monospace;font-size:12px;line-height:1.7;color:var(--ink-soft)}
+  .flow .node{background:var(--paper);border:1px solid var(--line-soft);padding:5px 10px;margin-bottom:4px;text-align:center;color:var(--ink)}
+  .flow .node.js{border-color:var(--green);background:rgba(74,124,89,0.08);color:var(--green)}
+  .flow .arrow{text-align:center;color:var(--ink-mute);margin:-1px 0}
+  /* table */
+  table{width:100%;border-collapse:collapse;background:var(--paper-warm);border:1.5px solid var(--ink);box-shadow:4px 4px 0 var(--shadow)}
+  th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line-soft);font-size:13px;vertical-align:top}
+  th{background:var(--ink);color:var(--paper);font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:0.15em;text-transform:uppercase;font-weight:500}
+  tr:last-child td{border-bottom:none}
+  td code{font-size:11.5px}
+  .col-step{width:64px;font-family:"IBM Plex Mono",monospace;font-weight:600;color:var(--vermillion)}
+  .op-new{color:var(--green);font-weight:600}
+  .op-del{color:var(--vermillion);font-weight:600}
+  .op-keep{color:var(--ochre);font-weight:600}
+  /* lists */
+  ul.clean{list-style:none}
+  ul.clean li{padding:5px 0 5px 18px;position:relative;font-size:13.5px;line-height:1.5;border-bottom:1px dotted var(--line-soft)}
+  ul.clean li:last-child{border-bottom:none}
+  ul.clean li::before{content:"›";position:absolute;left:0;color:var(--vermillion);font-weight:600}
+  ol.steps{list-style:none;counter-reset:s}
+  ol.steps li{padding:6px 0 6px 30px;position:relative;font-size:13.5px;line-height:1.55;border-bottom:1px dotted var(--line-soft)}
+  ol.steps li:last-child{border-bottom:none}
+  ol.steps li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:6px;background:var(--ink);color:var(--paper);width:19px;height:19px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:"IBM Plex Mono",monospace;font-size:10px;font-weight:600}
+  /* verify */
+  .verify-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 20px}
+  .vrow{display:grid;grid-template-columns:54px 1fr;gap:10px;padding:6px 0;border-bottom:1px dotted var(--line-soft);font-size:13px;align-items:start}
+  .vrow .id{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--vermillion);font-weight:600;padding-top:1px}
+  /* risk */
+  .risk{border-left:4px solid var(--vermillion);background:var(--paper-warm);padding:12px 16px;margin-bottom:12px}
+  .risk h5{font-family:"Cormorant Garamond",serif;font-style:italic;font-size:16px;font-weight:600;margin-bottom:4px}
+  .risk p{font-size:13px;color:var(--ink-soft);margin:0}
+  .risk .mit{margin-top:5px;font-size:12.5px;color:var(--green)}
+  .risk .mit::before{content:"+ 緩和: ";font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:0.1em;font-weight:600}
+  @media(max-width:880px){.feat-grid{grid-template-columns:1fr}.decided{grid-template-columns:1fr}.verify-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <div class="stamp-row">
+    <span>VRAM-SAFE-BATCH / TEXT REPLACE → PURE JS</span>
+    <span class="doc-id">DOC-Ⅷ-F · PLAN</span>
+    <span>2026-05-28 / FUKU-HIRO112</span>
+  </div>
+
+  <header class="title-block">
+    <div class="title-section">SECTION VIII-F — TEXT REPLACE 純JS化</div>
+    <h1>Ctrl+F で、<em>浮かび上がる。</em></h1>
+    <p class="lede">
+      Phase 8-E で見送った 3 機能 (Ctrl+F バインド / フローティングパネル / ハイライト) を、
+      Gradio Script を廃して <code>javascript/text_replace.js</code> 1 ファイルの VSCode 風ウィジェットに置き換える。
+    </p>
+  </header>
+
+  <!-- CONTEXT -->
+  <section class="section">
+    <div class="section-head"><span class="section-num">Ⅰ.</span><h2 class="section-title">なぜ<em>作り直すのか</em></h2></div>
+    <div class="card">
+      <p>Phase 8-E の <code>scripts/text_replace.py</code> は Gradio Accordion パネルとして実装されたが、当初構想の 3 機能が未達のまま:</p>
+      <div class="feat-grid" style="margin-top:14px">
+        <div class="feat">
+          <span class="num">1</span>
+          <h4>Ctrl+F バインド</h4>
+          <div class="now">現状: 手動で Accordion 開閉</div>
+          <div class="how">プロンプト欄フォーカス中の Ctrl+F でパネルを開く。グローバル keydown フック。</div>
+        </div>
+        <div class="feat">
+          <span class="num">2</span>
+          <h4>フローティングパネル</h4>
+          <div class="now">現状: 通常 Accordion 内配置</div>
+          <div class="how">画面に <code>position:fixed</code> で浮かぶダークテーマ対応パネル。</div>
+        </div>
+        <div class="feat">
+          <span class="num">3</span>
+          <h4>マッチハイライト</h4>
+          <div class="now">現状: テキストで前後文脈表示のみ</div>
+          <div class="how"><code>setSelectionRange</code> で現在マッチを選択ハイライト + スクロール追従。</div>
+        </div>
+      </div>
+      <p style="margin-top:16px">いずれも<strong>クライアントサイド JS でしか自然に実現できない</strong>機能。加えて現状の Gradio 実装は Python 往復 + <code>.then(_js=)</code> の Gradio 4.40 互換が未検証という弱点を抱える。よって純 JS ウィジェットに一本化する。</p>
+    </div>
+  </section>
+
+  <!-- DECISIONS -->
+  <section class="section">
+    <div class="section-head"><span class="section-num">Ⅱ.</span><h2 class="section-title">ユーザー<em>決定事項</em></h2></div>
+    <div class="decided">
+      <div class="pill"><div class="k">実装方式</div><div class="v">純 JS に置換</div><div class="n">Gradio Accordion パネルは削除し、javascript/text_replace.js 1 ファイルに集約。Python 往復なし。</div></div>
+      <div class="pill"><div class="k">ハイライト</div><div class="v">setSelectionRange</div><div class="n">現在マッチ 1 件を textarea ネイティブ選択でハイライト。◀▶ で移動。全マッチ同時ハイライトはしない。</div></div>
+    </div>
+  </section>
+
+  <!-- FORGE MECHANICS -->
+  <section class="section">
+    <div class="section-head"><span class="section-num">Ⅲ.</span><h2 class="section-title">調査で判明した<em>Forge の仕組み</em></h2></div>
+    <ul class="clean">
+      <li><code>javascript/*.js</code> は起動時に自動 <code>&lt;script&gt;</code> 読込 (<code>modules/ui_gradio_extensions.py:javascript_html()</code>)。リポジトリルートの <code>javascript/</code> が対象。</li>
+      <li>グローバル keydown の参考: <code>javascript/edit-attention.js</code> (Ctrl+方向キー)。フォーカス判定 <code>target.matches("*:is([id*='_toprow'] [id*='_prompt'], .prompt) textarea")</code>。</li>
+      <li>textarea 値を書き換えたら <code>updateInput(target)</code> (<code>javascript/ui.js</code>) を呼ぶと Gradio 状態が同期。</li>
+      <li>メインプロンプト DOM: <code>#txt2img_prompt textarea</code> / <code>#img2img_prompt textarea</code>。</li>
+      <li>CSS は JS から <code>&lt;style&gt;</code> 注入が最も自己完結的 (style.css 自動ロードは名前固定のため新規 CSS に使えない)。</li>
+    </ul>
+  </section>
+
+  <!-- DATA FLOW -->
+  <section class="section">
+    <div class="section-head"><span class="section-num">Ⅳ.</span><h2 class="section-title">動作<em>フロー</em></h2></div>
+    <div class="card">
+      <div class="flow">
+        <div class="node">プロンプト欄をクリック (textarea にフォーカス)</div>
+        <div class="arrow">▼ Ctrl+F</div>
+        <div class="node js">keydown フック: preventDefault + パネル表示 + activeTextarea 記録</div>
+        <div class="arrow">▼ 検索語入力 (input イベント)</div>
+        <div class="node js">findMatches() → [[start,end]...] + 件数 N/M 表示</div>
+        <div class="arrow">▼ ◀▶ で navigate</div>
+        <div class="node js">setSelectionRange(start,end) + スクロール追従 (循環)</div>
+        <div class="arrow">▼ 1件置換 / 全置換</div>
+        <div class="node js">value 書換 → updateInput() で Gradio 同期 → 再検索</div>
+        <div class="arrow">▼ Esc</div>
+        <div class="node">パネルを閉じて textarea にフォーカス復帰</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FILES -->
+  <section class="section">
+    <div class="section-head"><span class="section-num">Ⅴ.</span><h2 class="section-title">変更<em>ファイル</em></h2></div>
+    <table>
+      <thead><tr><th>パス</th><th>操作</th><th>備考</th></tr></thead>
+      <tbody>
+        <tr><td><code>javascript/text_replace.js</code></td><td class="op-new">新規作成</td><td>本体 ~250 行。CSS 注入 + パネル DOM + 検索/置換/navigate + ハイライト</td></tr>
+        <tr><td><code>scripts/text_replace.py</code></td><td class="op-del">削除</td><td>Gradio Script 廃止。auto-import 対象から外れる</td></tr>
+        <tr><td><code>scripts/vram_safe_batch_modules/text_tools.py</code></td><td class="op-keep">保持</td><td>JS 実装の挙動 spec / 回帰基準として残置</td></tr>
+        <tr><td><code>tests/test_text_replace.py</code></td><td class="op-keep">保持</td><td>text_tools の L1 テスト 11 ケース</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:12px;font-size:13px;color:var(--ink-mute)">参考にする既存コード: <code>javascript/edit-attention.js</code> L1-4 (keydown+フォーカス判定) / <code>javascript/ui.js</code> L368-372 (updateInput) / <code>text_tools.py</code> (find/replace/navigate の意味論)。</p>
+  </section>
+
+  <!-- JS FILE STRUCTURE -->
+  <section class="section">
+    <div class="section-head"><span class="section-num">Ⅵ.</span><h2 class="section-title">text_replace.js の<em>構成</em></h2></div>
+    <div class="card">
+      <ol class="steps">
+        <li><strong>CSS 注入</strong>: ロード時に <code>&lt;style&gt;</code> を head に追加。フローティングパネル (fixed / 半透明ダーク背景 / 角丸 / シャドウ)。デフォルト非表示。</li>
+        <li><strong>DOM 構築</strong>: パネル (検索 input / 置換 input / 件数 N/M / ◀▶ / Aa 大小区別 / .* 正規表現 / 1件置換 / 全置換 / × 閉じる) を 1 度だけ生成し <code>document.body</code> 直下に append。</li>
+        <li><strong>状態</strong>: <code>activeTextarea</code> / <code>matches</code> / <code>currentIndex</code>。</li>
+        <li><strong>検索ロジック (純 JS、text_tools.py をミラー)</strong>: <code>findMatches</code> / <code>replaceOne</code> / <code>replaceAll</code> / <code>navigate(dir)</code> (循環)。正規表現無効は try/catch で空配列。</li>
+        <li><strong>Ctrl+F ハンドラ</strong>: prompt textarea フォーカス時のみ preventDefault + パネル表示 + 検索 input にフォーカス。それ以外はブラウザ標準を素通し。</li>
+        <li><strong>ハイライト</strong>: currentIndex のマッチを <code>setSelectionRange</code> + スクロール調整 + 件数表示。</li>
+        <li><strong>Esc</strong>: 閉じて textarea にフォーカス復帰。</li>
+        <li><strong>置換後</strong>: value 書換 → <code>updateInput</code> で Gradio 同期 → 再検索してハイライト更新。</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- COMMIT PLAN -->
+  <section class="section">
+    <div class="section-head"><span class="section-num">Ⅶ.</span><h2 class="section-title">コミット<em>計画</em></h2></div>
+    <table>
+      <thead><tr><th class="col-step">Step</th><th>内容</th><th>コミットメッセージ</th></tr></thead>
+      <tbody>
+        <tr><td class="col-step">F1</td><td>text_replace.js 新規: CSS + パネル DOM + 検索 + 件数 + Ctrl+F/Esc + ◀▶ navigate + setSelectionRange ハイライト</td><td><code>feat(8-F1): text_replace.js 純JSフローティング検索ウィジェット</code></td></tr>
+        <tr><td class="col-step">F2</td><td>置換 (1件/全) + updateInput 同期 + 正規表現/大小区別トグル</td><td><code>feat(8-F2): 置換と正規表現/大小区別トグルを追加</code></td></tr>
+        <tr><td class="col-step">F3</td><td>scripts/text_replace.py 削除 (JS版に一本化)</td><td><code>refactor(8-F3): Gradio版 text_replace.py を削除</code></td></tr>
+        <tr><td class="col-step">F4</td><td>git tag phase-8-f-done</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- VERIFY -->
+  <section class="section">
+    <div class="section-head"><span class="section-num">Ⅷ.</span><h2 class="section-title">検証 (<em>L2 手動</em>)</h2></div>
+    <div class="card">
+      <p style="font-size:13px">JS UI のため L1 自動テストは不可。<code>python -m unittest discover tests</code> は既存 200 件 PASS 維持のみ確認。WebUI 再起動後に以下を手動確認:</p>
+      <div class="verify-grid" style="margin-top:12px">
+        <div class="vrow"><span class="id">F-01</span><span>起動: Console エラーなし、text_replace.js が head に読込</span></div>
+        <div class="vrow"><span class="id">F-02</span><span>Ctrl+F: プロンプト欄で押すと右上にパネル、ブラウザ検索は出ない</span></div>
+        <div class="vrow"><span class="id">F-03</span><span>検索: 件数 N/M 表示 + 先頭マッチが選択ハイライト</span></div>
+        <div class="vrow"><span class="id">F-04</span><span>ナビゲート: ◀▶ で前後移動、ハイライト+スクロール追従、循環</span></div>
+        <div class="vrow"><span class="id">F-05</span><span>1件置換: 現在マッチ置換、Gradio 反映、件数減少</span></div>
+        <div class="vrow"><span class="id">F-06</span><span>全置換: 全マッチ置換 + 件数 0</span></div>
+        <div class="vrow"><span class="id">F-07</span><span>正規表現/大小区別トグルで挙動変化、無効正規表現でエラーなし</span></div>
+        <div class="vrow"><span class="id">F-08</span><span>Esc: パネル閉じ、textarea にフォーカス復帰</span></div>
+        <div class="vrow"><span class="id">F-09</span><span>非干渉: プロンプト欄外の Ctrl+F はブラウザ標準検索</span></div>
+        <div class="vrow"><span class="id">F-10</span><span>img2img タブでも同様に動作</span></div>
+        <div class="vrow"><span class="id">F-11</span><span>回帰: Prompt Expander / Batch Resume / 通常生成が従来通り</span></div>
+      </div>
+      <p style="margin-top:12px;font-size:13px">ロールバック: <code>git reset --hard phase-8-e-done</code>。</p>
+    </div>
+  </section>
+
+  <!-- RISKS -->
+  <section class="section">
+    <div class="section-head"><span class="section-num">Ⅸ.</span><h2 class="section-title"><em>リスク</em>と緩和</h2></div>
+    <div class="risk"><h5>Ctrl+F がブラウザ標準検索と衝突</h5><p>prompt textarea フォーカス時のみ preventDefault。それ以外は素通し。</p><div class="mit">F-09 で確認</div></div>
+    <div class="risk"><h5>非フォーカス textarea の選択ハイライトが見えにくい</h5><p>多くのブラウザは非フォーカス選択を淡色描画する。</p><div class="mit">navigate 時に一瞬 textarea へ focus→選択→search input へ復帰する方式を F1 で検証</div></div>
+    <div class="risk"><h5>updateInput 未定義環境</h5><p>関数が無いと Gradio 同期が失敗する可能性。</p><div class="mit"><code>typeof updateInput === 'function'</code> ガード後に呼び、無ければ input イベント手動 dispatch にフォールバック</div></div>
+    <div class="risk"><h5>Gradio 動的再描画でパネル DOM が消える</h5><p>Gradio コンテナ内に置くと再描画で消失。</p><div class="mit">パネルは <code>document.body</code> 直下に append しコンテナ外に隔離</div></div>
+    <div class="risk"><h5>JS ロジックに自動テストがない</h5><p>純 JS のため L1 で覆えない。</p><div class="mit">text_tools.py + tests を挙動 spec として残置、JS はそれをミラー。重要ケース (正規表現無効/循環) を F-04/F-07 で手動確認</div></div>
+  </section>
+
+</div>
+</body>
+</html>

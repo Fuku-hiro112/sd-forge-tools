@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Hotfix-3: 起動時 event loop エラー 修正設計</title>
+<style>
+  :root {
+    --bg:#f7f8fa; --card:#fff; --text:#1f2933; --muted:#5c6773; --accent:#2563eb;
+    --err-bg:#fef2f2; --err-border:#fca5a5; --err-tag:#b91c1c;
+    --ok-bg:#f0fdf4; --ok-border:#86efac; --ok-tag:#15803d;
+    --warn-bg:#fffbeb; --warn-border:#fcd34d; --warn-tag:#b45309;
+    --code-bg:#1e293b; --code-text:#e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body { background:var(--bg); color:var(--text); margin:0; padding:28px 16px;
+    font-family:"Noto Sans JP","Yu Gothic UI",system-ui,sans-serif; line-height:1.6; }
+  .wrap { max-width:920px; margin:0 auto; }
+  header {
+    background:linear-gradient(135deg,#1e3a8a 0%,#dc2626 100%);
+    color:#fff; border-radius:12px; padding:20px 24px; margin-bottom:20px;
+    box-shadow:0 4px 16px rgba(220,38,38,0.18);
+  }
+  header h1 { margin:0 0 4px; font-size:22px; }
+  header .sub { margin:0; opacity:0.92; font-size:13px; }
+  .card { background:var(--card); border:1px solid #e5e7eb; border-radius:10px;
+    padding:18px 22px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+  .card h2 { margin:0 0 10px; padding-bottom:8px; border-bottom:2px solid #e5e7eb;
+    font-size:17px; color:var(--accent); display:flex; align-items:center; gap:8px; }
+  .icon { display:inline-block; width:26px; height:26px; border-radius:50%; text-align:center;
+    line-height:26px; font-size:14px; font-weight:700; }
+  .icon.err { background:var(--err-tag); color:#fff; }
+  .icon.ok  { background:var(--ok-tag); color:#fff; }
+  .icon.info { background:var(--accent); color:#fff; }
+  pre { background:var(--code-bg); color:var(--code-text); padding:12px 14px;
+    border-radius:6px; overflow-x:auto; font-size:12.5px; line-height:1.5;
+    font-family:"JetBrains Mono",Consolas,monospace; margin:6px 0; }
+  code.inline { background:#f3f4f6; padding:1px 6px; border-radius:3px;
+    font-family:"JetBrains Mono",Consolas,monospace; font-size:12.5px; }
+  .block-err {
+    background:var(--err-bg); border-left:4px solid var(--err-border); border-radius:6px;
+    padding:10px 14px; margin:8px 0; font-size:13px;
+  }
+  .block-ok {
+    background:var(--ok-bg); border-left:4px solid var(--ok-border); border-radius:6px;
+    padding:10px 14px; margin:8px 0; font-size:13px;
+  }
+  .block-warn {
+    background:var(--warn-bg); border-left:4px solid var(--warn-border); border-radius:6px;
+    padding:10px 14px; margin:8px 0; font-size:13px;
+  }
+  table { width:100%; border-collapse:collapse; margin:8px 0; font-size:13px; }
+  th, td { padding:7px 10px; border-bottom:1px solid #e5e7eb; text-align:left; vertical-align:top; }
+  th { background:#f3f4f6; color:var(--muted); font-weight:600; font-size:12px; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:4px;
+    font-size:11px; font-weight:600; letter-spacing:0.04em; }
+  .badge-err { background:#fee2e2; color:#991b1b; }
+  .badge-ok  { background:#d1fae5; color:#065f46; }
+  ol li, ul li { margin:3px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>🔴 Hotfix-3: WebUI 起動時 event loop エラー</h1>
+  <p class="sub">原因 / 修正方針 / 影響範囲 を 1 ページにまとめた設計確認資料</p>
+</header>
+
+<!-- 症状 -->
+<section class="card">
+  <h2><span class="icon err">!</span>1. 症状</h2>
+  <p>WebUI 起動時、<code class="inline">_register_api</code> コールバックが以下のエラーで失敗。
+  API（<code class="inline">/sync_variables</code> など Phase A/B/C で追加した分）は<b>全て未登録</b>になり、Variable Manager 同期が動かない。</p>
+  <pre>*** Error executing callback app_started_callback for ...vram_safe_batch_v3b.py
+    File "...vram_safe_batch_v3b.py", line 259, in _register_api
+        asyncio.create_task(_watch_variables_file())
+    RuntimeError: no running event loop</pre>
+</section>
+
+<!-- 原因 -->
+<section class="card">
+  <h2><span class="icon err">!</span>2. 原因</h2>
+  <p><code class="inline">_register_api(demo, app)</code> は WebUI/Forge から <b>同期コールバック</b>として呼ばれる（event loop の外側）。
+  <code class="inline">asyncio.create_task()</code> は実行中の event loop が必須なので、ここで直接呼ぶと <code class="inline">RuntimeError</code>。</p>
+  <div class="block-err">
+    Phase B (commit <code class="inline">298d23c0</code>) で file watcher を入れた時、event loop の起動タイミングを考慮せずに <code class="inline">_register_api</code> 末尾で <code class="inline">asyncio.create_task</code> を直接呼んでしまったのが直接原因。
+  </div>
+</section>
+
+<!-- 修正方針 -->
+<section class="card">
+  <h2><span class="icon ok">✓</span>3. 修正方針</h2>
+  <p>FastAPI の <b>startup イベントハンドラ</b>を介して、event loop が起動した直後に watcher タスクを生成する。</p>
+
+  <table>
+    <tr>
+      <th style="width:42%">修正前（NG）</th>
+      <th style="width:58%">修正後（OK）</th>
+    </tr>
+    <tr>
+      <td><pre>asyncio.create_task(
+    _watch_variables_file()
+)</pre></td>
+      <td><pre>@app.on_event("startup")
+async def _start_watcher():
+    asyncio.create_task(
+        _watch_variables_file()
+    )</pre></td>
+    </tr>
+  </table>
+
+  <div class="block-ok">
+    <b>動作タイミング:</b>
+    <ol>
+      <li>WebUI 起動 → <code class="inline">_register_api</code> 同期呼び出し</li>
+      <li><code class="inline">app.on_event("startup")</code> でハンドラ登録（タスクは作らない）</li>
+      <li>uvicorn が FastAPI を起動 → event loop 内で startup ハンドラが呼ばれる</li>
+      <li>このとき初めて <code class="inline">asyncio.create_task</code> が成功し、watcher タスク開始</li>
+    </ol>
+  </div>
+
+  <div class="block-warn">
+    <b>注意:</b> <code class="inline">app.on_event("startup")</code> は FastAPI 0.96+ で deprecation 警告が出る（最終的に <code class="inline">lifespan</code> へ移行が推奨）。
+    Forge の FastAPI は古めのため当面これで動かす。将来 Forge が FastAPI を上げたら <code class="inline">lifespan</code> パターンに移行する余地あり。
+  </div>
+</section>
+
+<!-- 修正範囲 -->
+<section class="card">
+  <h2><span class="icon info">i</span>4. 修正範囲</h2>
+  <table>
+    <tr><th>項目</th><th>内容</th></tr>
+    <tr><td>変更ファイル</td><td><code class="inline">scripts/vram_safe_batch_v3b.py</code> の <code class="inline">_register_api</code> 内、line 259 周辺</td></tr>
+    <tr><td>変更行数</td><td>約 5 行（<code class="inline">asyncio.create_task</code> 1 行 → デコレータ + async def 3 行）</td></tr>
+    <tr><td>新規テスト</td><td>不要（event loop 依存の統合動作のため L1 困難、L2 で起動確認）</td></tr>
+    <tr><td>既存テスト</td><td>127/127 PASS のまま影響なし</td></tr>
+    <tr><td>commit</td><td><b>今は実施しない</b>（ユーザー指示）。実機で起動エラー解消を確認後、ユーザー承認を得てから commit</td></tr>
+  </table>
+</section>
+
+<!-- 使用感への影響 -->
+<section class="card">
+  <h2><span class="icon info">i</span>5. 使用感への影響</h2>
+
+  <h3 style="margin:10px 0 4px; font-size:14px; color:var(--ok-tag);">望ましい変化</h3>
+  <table>
+    <tr>
+      <th>項目</th>
+      <th>修正前</th>
+      <th>修正後</th>
+    </tr>
+    <tr>
+      <td>起動時のエラーログ</td>
+      <td><span class="badge badge-err">RuntimeError 出力</span></td>
+      <td><span class="badge badge-ok">エラー無し</span></td>
+    </tr>
+    <tr>
+      <td>v3b API 登録</td>
+      <td><span class="badge badge-err">全 API 未登録</span><br>（peek_jobs / sync_variables / variables / variables/events）</td>
+      <td><span class="badge badge-ok">全 API 動作</span></td>
+    </tr>
+    <tr>
+      <td>Variable Manager 自動同期</td>
+      <td><span class="badge badge-err">動かない</span></td>
+      <td><span class="badge badge-ok">動く</span></td>
+    </tr>
+    <tr>
+      <td>外部エディタ変更検知（Phase B）</td>
+      <td><span class="badge badge-err">動かない</span></td>
+      <td><span class="badge badge-ok">file watcher 起動、SSE 通知</span></td>
+    </tr>
+  </table>
+
+  <h3 style="margin:10px 0 4px; font-size:14px; color:var(--warn-tag);">注意事項</h3>
+  <ul>
+    <li>watcher タスクの起動が <b>uvicorn の startup イベント発火後</b>に遅れる（数百 ms 程度、実用上は無視可）</li>
+    <li><code class="inline">on_event("startup")</code> deprecation 警告が将来のログに出る可能性</li>
+  </ul>
+
+  <h3 style="margin:10px 0 4px; font-size:14px; color:var(--muted);">変化なし</h3>
+  <ul>
+    <li>変数展開ロジック・履歴・シードモード等の機能挙動</li>
+    <li>API のエンドポイント仕様（同じ URL/レスポンス）</li>
+    <li>テスト数（127 件）</li>
+  </ul>
+</section>
+
+<!-- L2 検証手順 -->
+<section class="card">
+  <h2><span class="icon info">i</span>6. L2 検証手順</h2>
+  <ol>
+    <li><code class="inline">webui-user.bat</code> 起動</li>
+    <li>起動ログに <code class="inline">RuntimeError: no running event loop</code> が <b>出ないこと</b></li>
+    <li>起動ログに以下が表示されること:
+      <pre>[VRAM Safe Batch] API endpoints registered: /set_jobs /status /peek_jobs /sync_variables /variables /variables/events</pre>
+    </li>
+    <li>Variable Manager (sd_variable_manager.html) を開き、変数を 1 個編集 → 500ms 以内に <code class="inline">vars/variables.json</code> が更新される</li>
+    <li>外部エディタで <code class="inline">vars/variables.json</code> を直接編集して保存 → 1〜2 秒で Manager UI に反映、トースト「🔄 Forge 側変更を取り込みました」</li>
+  </ol>
+</section>
+
+</div>
+</body>
+</html>

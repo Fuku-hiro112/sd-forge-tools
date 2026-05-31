@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>vram_safe_batch 改修サマリ</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --card-bg: #ffffff;
+    --text: #1f2933;
+    --muted: #5c6773;
+    --accent: #2563eb;
+    --before-bg: #fef2f2;
+    --before-border: #fca5a5;
+    --before-tag: #b91c1c;
+    --after-bg: #f0fdf4;
+    --after-border: #86efac;
+    --after-tag: #15803d;
+    --note-bg: #fffbeb;
+    --note-border: #fcd34d;
+    --note-tag: #b45309;
+    --files-bg: #f3f4f6;
+    --files-border: #d1d5db;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Noto Sans JP", "Yu Gothic UI", "Meiryo UI", system-ui, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 32px 16px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  header {
+    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+    color: #fff;
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.18);
+  }
+  header h1 { margin: 0 0 8px; font-size: 26px; font-weight: 700; letter-spacing: 0.02em; }
+  header .sub { margin: 0; opacity: 0.92; font-size: 14px; }
+  .scope {
+    background: #fff7ed;
+    border-left: 5px solid #f97316;
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 28px;
+    font-size: 14px;
+  }
+  .scope b { color: #9a3412; }
+  .toc {
+    background: var(--card-bg);
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 14px 22px;
+    margin-bottom: 28px;
+  }
+  .toc h2 { margin: 0 0 8px; font-size: 14px; color: var(--muted); font-weight: 600; }
+  .toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+  .toc li { margin: 2px 0; font-size: 14px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin-bottom: 22px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .card h2 {
+    margin: 0 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e5e7eb;
+    font-size: 19px;
+    color: var(--accent);
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .card h2 .idx {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+    text-align: center;
+    line-height: 28px;
+    flex-shrink: 0;
+  }
+  .block {
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 10px 0;
+  }
+  .block .tag {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+  .before {
+    background: var(--before-bg);
+    border-left: 4px solid var(--before-border);
+  }
+  .before .tag {
+    background: var(--before-tag);
+    color: #fff;
+  }
+  .after {
+    background: var(--after-bg);
+    border-left: 4px solid var(--after-border);
+  }
+  .after .tag {
+    background: var(--after-tag);
+    color: #fff;
+  }
+  .note {
+    background: var(--note-bg);
+    border-left: 4px solid var(--note-border);
+  }
+  .note .tag {
+    background: var(--note-tag);
+    color: #fff;
+  }
+  .files {
+    background: var(--files-bg);
+    border: 1px dashed var(--files-border);
+    border-radius: 6px;
+    padding: 8px 14px;
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .files b { color: var(--text); }
+  code, .mono {
+    font-family: "Cascadia Code", "Consolas", "SFMono-Regular", monospace;
+    background: #f1f5f9;
+    color: #0f172a;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 90%;
+  }
+  pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 6px 0;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    font-size: inherit;
+    word-break: normal;
+  }
+  .block p { margin: 4px 0; }
+  ul { margin: 4px 0; padding-left: 22px; }
+  li { margin: 2px 0; }
+  footer {
+    margin-top: 32px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>vram_safe_batch 改修サマリ</h1>
+    <p class="sub">本セッションで検討した改修ポイントを機能別に整理 / 2026-05-19 作成</p>
+  </header>
+
+  <div class="scope">
+    <b>スコープ:</b>
+    本サマリの対象は <code>scripts/vram_safe_batch_v3b.py</code> と <code>scripts/vram_safe_batch_modules/</code> のみ。
+    <code>vram_safe_batch.py</code> (v3 / 旧) と <code>vram_safe_batch_v3a.py</code> は対象外（ユーザー確認済み）。
+    また <b>dynamic-prompts は OFF で使う前提</b>（共存は遠い将来の別案件）。
+  </div>
+
+  <div class="toc">
+    <h2>目次（機能別）</h2>
+    <ol>
+      <li><a href="#f1">メインプロンプト統合</a></li>
+      <li><a href="#f2">シード値モード（固定/連番）</a></li>
+      <li><a href="#f3">completed カウンタのタイミング</a></li>
+      <li><a href="#f4">履歴ドロップダウン乖離</a></li>
+      <li><a href="#f5">不在 LoRA クラッシュ回避</a></li>
+      <li><a href="#f6">UI コンパクト化（VSCode 風検索＋全要素）</a></li>
+      <li><a href="#f7">「Forge に送信」フロー</a></li>
+      <li><a href="#f8">責務分離（Phase 2 案）</a></li>
+      <li><a href="#pending">保留事項（後日対応）</a></li>
+      <li><a href="#addons">追加実施事項</a></li>
+    </ol>
+  </div>
+
+  <!-- 1. メインプロンプト統合 -->
+  <section class="card" id="f1">
+    <h2><span class="idx">1</span>メインプロンプト統合（確定仕様）</h2>
+
+    <div class="block before">
+      <span class="tag">BEFORE</span>
+      <p>vram_safe_batch v3b は専用 <code>gr.Textbox(label="生成リスト")</code> に <code>$変数 = ...</code> や <code>//</code> を書く方式。
+      生成順とプロンプト内位置（優先度）を <code>{N}</code> 記法でリンクさせるが、対応関係が直感的でなく読み解きに時間がかかる。</p>
+      <p>例（BEFORE）:</p>
+      <pre><code>メイン: {3}{1}{2}
+vramsafe: 1girl // $服装変数 // $キャラ</code></pre>
+      <p>問題:</p>
+      <ul>
+        <li>tagcomplete は <code>#txt2img_prompt</code> 限定 → 専用 textbox では効かない</li>
+        <li>ADetailer / Hires.fix 他拡張との連携が分かりにくい</li>
+        <li><code>{1}{2}{3}</code> の対応を頭で組み直す必要があり可読性が低い</li>
+        <li>共通変数を別プロンプトで再利用できず、毎回書き直し</li>
+      </ul>
+    </div>
+
+    <div class="block after">
+      <span class="tag">AFTER (確定)</span>
+      <p><b>1-A. 案G: 変数名直接埋め込み + ドラッグ並び替え展開順</b></p>
+      <ul>
+        <li>メイン Prompt に <code>$char, 1girl, $outfit</code> のように <b>変数名を位置で直接書く</b>。プロンプト内位置 = SD 優先度がそのまま見える。</li>
+        <li>展開順（ループのネスト順）は vram_safe_batch UI 側の <b>ドラッグ並び替えリスト</b> で指定。上が外側ループ（変化が遅い）。</li>
+      </ul>
+      <p><b>1-A-2. メイン内変数定義の記法</b></p>
+      <ul>
+        <li><b>ブロック</b>: <code>変数---</code> と <code>---</code> で囲まれた範囲を変数定義として認識</li>
+        <li><b>インライン</b>: ブロック外でも行頭 <code>$名前 = ...</code> 行は変数定義として扱う</li>
+        <li>優先順位: メイン内定義 &gt; <code>variables.json</code></li>
+      </ul>
+      <p><b>1-B. <code>{N}</code> 記法は完全廃止</b></p>
+      <ul>
+        <li>パーサーは <code>{N}</code> を読まない。検出時は警告ログのみ。</li>
+        <li>旧 <code>batch_history.json</code> はマイグレーションせず <code>.bak.{timestamp}</code> にリネームして破棄。</li>
+      </ul>
+      <p><b>1-C. 案A: 外部変数ファイル <code>vars/variables.json</code></b></p>
+      <ul>
+        <li>1 ファイル集中、JSON 形式（schema v1）。起動時に全自動読込（<code>@use</code> 不要）。</li>
+        <li><code>sd_variable_manager.html</code> から直接編集（カテゴリ・タグ・並び替え）。</li>
+      </ul>
+      <p><b>1-D. history 形式刷新（schema v2）</b></p>
+      <ul>
+        <li><code>extensions</code> / <code>prompt.main</code> / <code>expansion_order</code> / <code>used_variables</code> 等を保存。</li>
+        <li>将来 Phase 2 の責務分離後も互換確認可能。</li>
+      </ul>
+    </div>
+
+    <div class="block note">
+      <span class="tag">入力例 1: variables.json に全部置く</span>
+      <pre><code>$char, 1girl, $outfit, best quality</code></pre>
+    </div>
+
+    <div class="block note">
+      <span class="tag">入力例 2: ブロックで局所定義</span>
+      <pre><code>変数---
+$char = alice;bob
+$outfit = casual;formal
+---
+$char, 1girl, $outfit, best quality</code></pre>
+    </div>
+
+    <div class="block note">
+      <span class="tag">入力例 3: インラインで局所定義</span>
+      <pre><code>$extra = smile;serious
+$char, 1girl, $outfit, $extra, best quality</code></pre>
+    </div>
+
+    <div class="block note">
+      <span class="tag">展開順 UI（ドラッグ並び替え）</span>
+      <pre><code>① $char    ← 外側ループ（変化が遅い）
+② $outfit  ← 内側ループ（先に全パターン回る）</code></pre>
+    </div>
+
+    <div class="block note">
+      <span class="tag">variables.json サンプル</span>
+      <pre><code>{
+  "schema_version": 1,
+  "variables": [
+    {"name": "char",   "category": "characters", "values": ["alice", "bob"]},
+    {"name": "outfit", "category": "outfits",    "values": ["casual", "formal"]}
+  ]
+}</code></pre>
+    </div>
+
+    <div class="block note">
+      <span class="tag">出力（生成プロンプト 4 通り）</span>
+      <pre><code>alice, 1girl, casual, best quality
+alice, 1girl, formal, best quality
+bob,   1girl, casual, best quality
+bob,   1girl, formal, best quality</code></pre>
+    </div>
+
+    <div class="block note">
+      <span class="tag">history v2 サンプル</span>
+      <pre><code>{
+  "schema_version": 2,
+  "entries": [{
+    "id": "20260520-091533-a1b2",
+    "timestamp": "2026-05-20 09:15:33",
+    "extensions": {"vram_safe_batch": "3b.2.0"},
+    "prompt": {
+      "main": "$char, 1girl, $outfit, best quality",
+      "negative": "...",
+      "expansion_order": ["char", "outfit"],
+      "used_variables": {"char": ["alice","bob"], "outfit": ["casual","formal"]}
+    },
+    "generation": {"width": 1024, "height": 1024, "cfg_scale": 7, "steps": 28,
+                   "sampler": "...", "scheduler": "...", "seed_mode": "...",
+                   "initial_seed": 12345, "clip_skip": 2},
+    "progress": {"completed": 5, "total": 16, "status": "running"}
+  }]
+}</code></pre>
+    </div>
+
+    <div class="block note">
+      <span class="tag">NOTE</span>
+      <ul>
+        <li>dynamic-prompts と同時 ON だと <code>$varname=</code> で pyparsing 例外。OFF 前提で開発。</li>
+        <li>本体プロンプトに装飾用の <code>---</code> を書くとブロック終了タグと誤認するため、ブロック記法使用時は本体に裸の <code>---</code> を含めない。</li>
+        <li>展開順 UI は Gradio のドラッグ並び替えコンポーネント次第。実装上の制約がある場合は上下移動ボタンで暫定対応。</li>
+      </ul>
+    </div>
+
+    <div class="files">
+      <b>影響範囲:</b>
+      新規: <code>scripts/vram_safe_batch_modules/{variables_store,expander,history_v2}.py</code> / <code>vars/variables.json</code> / <code>tests/test_{variables_store,expander,history_v2}.py</code><br>
+      改修: <code>scripts/vram_safe_batch_v3b.py</code> / <code>scripts/sd_variable_manager.html</code><br>
+      リネーム: <code>batch_history.json</code> → <code>batch_history.json.bak.{timestamp}</code>
+    </div>
+  </section>
+
+  <!-- 2. シード値モード -->
+  <section class="card" id="f2">
+    <h2><span class="idx">2</span>シード値モード（固定 / 連番）</h2>
+    <div class="block before">
+      <span class="tag">BEFORE</span>
+      <p>シードは <code>initial_seed + (global_num - 1)</code> の <b>連番固定</b>。同一画像を量産する「固定」モードが選べなかった。</p>
+    </div>
+    <div class="block after">
+      <span class="tag">AFTER</span>
+      <p><code>gr.Radio</code> で 2 択:</p>
+      <ul>
+        <li><b>固定</b>: 全画像で <code>seed = initial_seed</code>（構図維持してプロンプト/LoRA 比較用）</li>
+        <li><b>連番</b>: 現行通り <code>initial_seed + (global_num - 1)</code>（デフォルト、バリエーション生成用）</li>
+      </ul>
+      <p><code>initial_seed = -1</code> 指定時は開始シードを WebUI 側で乱択 → 以降は連番で続行。これにより「毎回違うバリエーション群」が表現でき、純粋ランダムの用途を吸収する。</p>
+      <p>シード計算は純粋関数 <code>compute_seed(mode, initial_seed, global_num)</code> に切り出して単体テスト可能化。</p>
+    </div>
+    <div class="block note">
+      <span class="tag">NOTE</span>
+      <p><b>「ランダム」モードを廃止した理由:</b> SD のシード→画像写像はカオス的で、<code>seed=N</code> と <code>seed=N+1</code> の出力は事実上無相関。連番モードでも視覚的にはランダム同等のバリエーションが得られるため、独立した「ランダム」モードは連番モードに完全に吸収される。再現性も連番の方が優れる（同じ <code>initial_seed</code> で同じ画像列を再生成可能）。</p>
+      <p>履歴 (<code>batch_history.json</code>) にも <code>seed_mode</code> と <code>resolved_initial_seed</code>（<code>-1</code> 解決後の実値）を保存し、resume 時に同じモード・同じシード列で継続する。</p>
+    </div>
+    <div class="files">
+      <b>影響範囲:</b>
+      <code>scripts/vram_safe_batch_v3b.py</code>（UI に Radio 追加、loop 内のシード計算置換）/
+      <code>scripts/vram_safe_batch_modules/progress.py</code>（<code>compute_seed</code> 追加、<code>create_new_progress</code> に <code>seed_mode</code> 引数）
+    </div>
+  </section>
+
+  <!-- 3. completed タイミング -->
+  <section class="card" id="f3">
+    <h2><span class="idx">3</span>completed カウンタの更新タイミング</h2>
+    <div class="block before">
+      <span class="tag">BEFORE</span>
+      <p>画像生成が中断 (<code>is_interrupted=True</code>) されても、<code>generate_one()</code> が部分結果を返してきた場合は <code>update_completed</code> が呼ばれて <code>completed</code> がバンプされる。</p>
+      <p>結果: 途中再開すると、中断時に半端だった画像番号がスキップされて <b>1 枚抜け</b> る。</p>
+    </div>
+    <div class="block after">
+      <span class="tag">AFTER</span>
+      <p>純粋関数 <code>should_update_completed(success, is_interrupted) -> bool</code> を追加し、<b>中断時はバンプしない</b>ルールに変更。中断後 resume すれば同じ画像番号から再生成する。</p>
+    </div>
+    <div class="block note">
+      <span class="tag">NOTE</span>
+      <p>WebUI の <code>postprocess_image</code> フック方式に移行すれば、画像が確実に保存された後にしか発火しないので、より自然に同じ意味が実現できる。</p>
+    </div>
+    <div class="files">
+      <b>影響範囲:</b>
+      <code>scripts/vram_safe_batch_modules/progress.py</code>（<code>should_update_completed</code> 追加）/
+      <code>scripts/vram_safe_batch_v3b.py</code>（generate ループ内の判定置換）
+    </div>
+  </section>
+
+  <!-- 4. 履歴ドロップダウン乖離 -->
+  <section class="card" id="f4">
+    <h2><span class="idx">4</span>履歴ドロップダウンの乖離</h2>
+    <div class="block before">
+      <span class="tag">BEFORE</span>
+      <p>履歴ドロップダウン <code>history_dropdown</code> の <code>choices</code> は Forge 起動時に <code>ui()</code> で 1 回だけ計算される。生成中・生成終了で <code>batch_history.json</code> が更新されてもドロップダウンには反映されない。</p>
+      <p>結果: ドロップダウン表示と「詳細」テキストボックスの内容が <b>乖離</b> する。</p>
+    </div>
+    <div class="block after">
+      <span class="tag">AFTER</span>
+      <p><code>history_dropdown.focus</code> イベントを紐付け、<b>ドロップダウンを開こうとした瞬間</b>に <code>get_dropdown_choices(base_dir)</code> を呼び直して <code>gr.update(choices=..., value=...)</code> を返す。手動ボタンは追加しない。</p>
+      <p>現在選択中の value は可能なら維持（新 choices に含まれていれば）、含まれていなければ先頭にフォールバック。choices 変化に伴い既存の <code>change</code> ハンドラが連鎖し、詳細テキストボックスも自動追随する。</p>
+    </div>
+    <div class="block note">
+      <span class="tag">NOTE</span>
+      <p><b>ポーリング不採用の根拠:</b> <code>batch_history.json</code> の更新タイミングは生成完了・中断・クラッシュ後起動に限定され、外部から不規則に変わるファイルではない。Timer ポーリングはアイドル時負荷を生むだけで利得がない。focus イベント駆動なら「履歴を選びたい瞬間」に必ず最新で、アイドル時オーバーヘッドゼロ。</p>
+      <p>純粋ロジックは <code>compute_focus_update(current_value, new_choices) -> (choices, value)</code> として切り出し単体テスト可能化。</p>
+    </div>
+    <div class="files">
+      <b>影響範囲:</b>
+      <code>scripts/vram_safe_batch_v3b.py::ui()</code>（<code>history_dropdown.focus</code> ハンドラ追加） /
+      <code>scripts/vram_safe_batch_modules/progress.py</code>（<code>compute_focus_update</code> 追加）
+    </div>
+  </section>
+
+  <!-- 5. 不在 LoRA -->
+  <section class="card" id="f5">
+    <h2><span class="idx">5</span>不在 LoRA によるクラッシュ回避 <span style="color:#888;font-size:0.7em;">【ペンディング】</span></h2>
+    <div class="block note" style="border-left-color:#888;">
+      <span class="tag">STATUS</span>
+      <p><b>ペンディング（2026-05-21 判断）</b> — ユーザーは LoRA ファイルを削除しない運用のため、現状では本問題は発生しない。実害が出た時点で実装する。詳細計画は <code>~/.claude/plans/3-jaunty-pike.md</code> に保存済み。</p>
+    </div>
+    <div class="block before">
+      <span class="tag">BEFORE</span>
+      <p>プロンプトに <code>&lt;lora:NAME:WEIGHT&gt;</code> があり、NAME が <code>models/Lora/</code> に存在しないと:</p>
+      <ul>
+        <li><code>extensions-builtin/sd_forge_lora/networks.py:63</code> で <code>network_on_disk.filename</code> が <b>NoneAttributeError</b></li>
+        <li>except 節も同じ <code>.filename</code> を参照していて二次クラッシュ（Forge 側のバグ）</li>
+      </ul>
+      <p>ユーザー環境では <code>models/Lora/</code> に 1 ファイルしかないが、<code>batch_history.json</code> の中に多数の不在 LoRA 参照が残っており、AlwaysOn 化後に再現しやすくなった。</p>
+    </div>
+    <div class="block after">
+      <span class="tag">AFTER</span>
+      <p>純粋関数モジュール <code>lora_check.py</code> を追加し:</p>
+      <ul>
+        <li><code>extract_lora_names(text)</code> — <code>&lt;lora:NAME:WEIGHT&gt;</code> から NAME を抽出</li>
+        <li><code>list_available_lora_basenames(lora_dir)</code> — <code>.safetensors / .ckpt / .pt / .bin</code> を再帰スキャン</li>
+        <li><code>strip_unavailable_loras(text, available)</code> — 不在 LoRA 参照を除去し、除去名のリストを返す</li>
+      </ul>
+      <p>展開済みプロンプトをすべて通してから <code>p.all_prompts</code> に入れる。除去した LoRA はコンソールに警告出力。</p>
+    </div>
+    <div class="block note">
+      <span class="tag">NOTE</span>
+      <p>本来は Forge 側で <code>network_on_disk is None</code> の防御を入れるべきだが、ユーザー環境内で完結させる回避策として実装する。</p>
+    </div>
+    <div class="files">
+      <b>影響範囲:</b>
+      <code>scripts/vram_safe_batch_modules/lora_check.py</code>（新規）/
+      <code>scripts/vram_safe_batch_v3b.py</code>（process 内で適用）
+    </div>
+  </section>
+
+  <!-- 6. UI コンパクト化 -->
+  <section class="card" id="f6">
+    <h2><span class="idx">6</span>UI コンパクト化（VSCode 風検索＋全要素のコンパクト化）</h2>
+    <div class="block before">
+      <span class="tag">BEFORE</span>
+      <p>v3b セクションが縦に長く、スクロールが多い。さらに専用 textbox が tagcomplete や他拡張と分断されている:</p>
+      <ul>
+        <li>上部の使い方説明 Markdown（4行）が常時展開</li>
+        <li>履歴セクション（ドロップダウン + 6行詳細 + チェックボックス）が常時展開</li>
+        <li>置換ツールが常時5行占有（検索/置換ボックス、オプション、マッチ情報、5ボタン）。しかも対象が <b>v3b 専用 textbox 限定</b>でメインプロンプトに使えない</li>
+        <li>生成リスト textbox が <code>lines=100</code>（画面の大半を占める）— §1 で完全廃止が決まっている</li>
+        <li>カラープレビュー HTML が生成リストと同等の高さで常時表示 — §1 廃止対象の textbox に追随するので一緒に廃止</li>
+        <li>記法ヘルプ Markdown（5行）と「プレビュー」見出し Markdown（2行）が縦に積まれる</li>
+        <li>変数管理アプリ連携が「読み込み」「挿入」の 2 ボタンに分散</li>
+      </ul>
+    </div>
+    <div class="block after">
+      <span class="tag">AFTER</span>
+      <p><b>① 生成リスト textbox とカラープレビュー HTML は完全廃止</b>（§1 メインプロンプト統合と整合）</p>
+      <ul>
+        <li>専用 textbox は削除。ユーザーは <code>#txt2img_prompt</code> / <code>#img2img_prompt</code> のメインプロンプト欄に変数記法（<code>$char, 1girl, $outfit</code>）を直接書く</li>
+        <li>カラープレビュー HTML も廃止（メインプロンプト欄に対する別領域のプレビューは表示位置がずれて使いにくいため）</li>
+        <li>変数定義のシンタックスハイライトが欲しくなったら、メインプロンプト textarea を <code>MutationObserver</code> で監視して上にオーバーレイ表示する方式を将来検討（§6 段階Bと同様の方式）</li>
+      </ul>
+      <p><b>② 置換ツールを VSCode 風フローティングパネル化（対象は<u>メインプロンプト欄</u>）:</b></p>
+      <ul>
+        <li><code>gr.Group(elem_id="vsb-search-panel")</code> + カスタム CSS で<b>メインプロンプト欄の右上</b>に <code>position: absolute</code> 配置</li>
+        <li>カスタム JS で<b>メインプロンプト欄にフォーカスがある状態で</b> <code>Ctrl+F</code> 押下時にパネル表示トグル、<code>Esc</code> で閉じる</li>
+        <li>マッチ件数を <code>3 / 12</code> 形式で表示、<code>▲▼</code> ジャンプ時は <code>#txt2img_prompt textarea</code> の該当文字を <code>setSelectionRange</code> で<b>選択状態</b>にして可視化</li>
+        <li>「置換」「一括置換」「Undo」は既存ロジック（<code>text_tools.py</code>）を流用しつつ、入出力対象をメインプロンプト textarea に切り替え</li>
+      </ul>
+      <p><b>③ 説明・ヘルプの折りたたみ:</b></p>
+      <ul>
+        <li>上部の使い方 Markdown と「生成リスト」記法ヘルプを統合して <code>gr.Accordion("📖 記法・使い方", open=False)</code> に格納</li>
+        <li>記法サンプル（変数定義ブロック、インライン定義、展開順 UI 説明など）も同 Accordion 内に集約</li>
+      </ul>
+      <p><b>④ 既存計画の継続:</b></p>
+      <ul>
+        <li>「途中再開」を <code>gr.Accordion(open=False)</code> で折りたたみ</li>
+        <li>変数管理アプリ連携は「📥 Variable Manager → メイン Prompt に投入」1 ボタンに統合</li>
+      </ul>
+    </div>
+    <div class="block note">
+      <span class="tag">NOTE</span>
+      <p><b>VSCode 風検索の対象が「メインプロンプト」になることの含意:</b></p>
+      <ul>
+        <li>v3b 単独機能ではなく WebUI 全体への被せ機能になる → AlwaysOn 化前提なら自然な拡張</li>
+        <li>txt2img と img2img の両タブでメインプロンプトを対象にする（それぞれの elem_id を見て切替）</li>
+        <li>Forge 標準の Ctrl+F（ブラウザのページ内検索）と衝突するため、<b>フォーカスがメインプロンプト textarea にある時のみ</b>横取りする実装が必要</li>
+      </ul>
+      <p><b>実装段階:</b></p>
+      <ul>
+        <li><b>段階A（本フェーズで実装）</b>: フローティングパネル + Ctrl+F トグル + 選択ハイライトで代替。実装工数最小</li>
+        <li><b>段階B（将来検討）</b>: 黄色背景の真のハイライト。textarea 上に同期する透明オーバーレイを JS で重ねる方式</li>
+      </ul>
+    </div>
+    <div class="files">
+      <b>影響範囲:</b>
+      <code>scripts/vram_safe_batch_v3b.py::ui()</code>（生成リスト textbox とプレビュー HTML 削除、Accordion 化、フローティングパネル定義、Ctrl+F バインド JS 埋め込み） /
+      <code>scripts/vram_safe_batch_modules/text_tools.py</code>（置換ロジックをメインプロンプト textarea 対象に変換、マッチ件数 <code>N / M</code> 形式の整形関数を純粋関数化） /
+      削除: <code>generate_preview_html</code> 関連の参照
+    </div>
+  </section>
+
+  <!-- 7. Forge に送信 -->
+  <section class="card" id="f7">
+    <h2><span class="idx">7</span>「Forge に送信」フロー</h2>
+    <div class="block before">
+      <span class="tag">BEFORE</span>
+      <p>変数管理アプリ <code>sd_variable_manager.html</code> から「Forge に送信」を押すと <code>POST /vram_safe_batch/api/set_jobs</code> が呼ばれ、サーバ側の <code>_pending_data</code> に保存される。ユーザーは Forge タブに切り替えて「📥 読み込み」ボタンを押し、Python ハンドラ経由で v3b の生成リスト textbox に展開する必要があった（タブ切替 + 2クリック）。</p>
+      <p>§1 でメインプロンプト統合・生成リスト textbox 廃止が決まったため、この流入経路は<b>そのままでは行き場を失う</b>。流入先をメインプロンプト textarea に切り替える必要がある。</p>
+    </div>
+    <div class="block after">
+      <span class="tag">AFTER</span>
+      <p>新 API <code>GET /vram_safe_batch/api/peek_jobs</code> を追加（取得 + 内部バッファクリア）。Variable Manager から送信されたデータは JS 経由で<b>メインプロンプト textarea に直接流し込む</b>:</p>
+      <ul>
+        <li>txt2img タブなら <code>#txt2img_prompt textarea</code></li>
+        <li>img2img タブなら <code>#img2img_prompt textarea</code></li>
+        <li>書き込み後 <code>input</code> イベントを <code>dispatchEvent</code> して Gradio に値変化を通知</li>
+      </ul>
+      <p>Forge 側 UI のボタンは「📥 Variable Manager → メイン Prompt に投入」1 ボタンに統合（§6 ④と整合）。ボタン押下時に <code>peek_jobs</code> を叩いて取得し、上記 textarea へ書き込む。</p>
+    </div>
+    <div class="block note">
+      <span class="tag">NOTE</span>
+      <ul>
+        <li>既存 <code>POST /set_jobs</code> エンドポイントは互換のため残す。Variable Manager 側の <code>forge.js</code> は変更不要</li>
+        <li>古い Python 側「📥 読み込み」ハンドラ <code>on_api_load</code>（v3b 専用 textbox に書き込んでいたもの）は削除</li>
+        <li>Variable Manager 側で送信するペイロードは現状の <code>group_list / prompt / negative_prompt</code> を維持。流入先側で <code>group_list</code> を main prompt にマッピングする（命名整理は Phase 2 で）</li>
+      </ul>
+    </div>
+    <div class="files">
+      <b>影響範囲:</b>
+      <code>scripts/vram_safe_batch_v3b.py::_register_api()</code>（<code>peek_jobs</code> 追加）/
+      <code>scripts/vram_safe_batch_v3b.py::ui()</code>（ボタンと JS。古い <code>on_api_load</code> 削除） /
+      互換維持: <code>scripts/sd_variable_manager.html</code>（変更不要）
+    </div>
+  </section>
+
+  <!-- 8. 責務分離 (Phase 2) -->
+  <section class="card" id="f8">
+    <h2><span class="idx">8</span>責務分離（Phase 2 案）</h2>
+    <div class="block before">
+      <span class="tag">BEFORE</span>
+      <p><code>vram_safe_batch</code> という名前に反して、現状 1 つのスクリプトが 5 つの責務を抱えている:</p>
+      <ul>
+        <li>VRAM リセット / OOM 回避</li>
+        <li>大量プロンプト展開（<code>//</code> <code>;</code> <code>$変数</code> <code>{N}</code>）</li>
+        <li>プロンプト変数化</li>
+        <li>履歴管理・途中再開</li>
+        <li>文字置換ツール</li>
+      </ul>
+      <p>結果: VRAM 管理だけ使いたいユーザーや、変数展開だけ使いたいユーザーに対して過剰。</p>
+    </div>
+    <div class="block after">
+      <span class="tag">AFTER（Phase 2 案）</span>
+      <p>機能別に独立拡張へ分割:</p>
+      <ul>
+        <li><b>prompt_expander</b>: <code>$変数 / // / ; / {N}</code> 展開（<code>job_builder_a/b.py</code> ベース）</li>
+        <li><b>vram_recycler</b>: 各画像生成後の VRAM 解放（<code>vram_manager.py</code> ベース）</li>
+        <li><b>batch_resume</b>: 履歴・途中再開（<code>progress.py</code> ベース）</li>
+        <li><b>text_replace</b>: 文字置換ツール（メインプロンプト対象に再設計）</li>
+      </ul>
+      <p>各拡張は <code>scripts.Script</code> または <code>script_callbacks</code> で独立登録、相互依存最小化。</p>
+    </div>
+    <div class="block note">
+      <span class="tag">NOTE</span>
+      <ul>
+        <li>Phase 1 で機能が安定してから着手。</li>
+        <li><code>scripts/</code> 直下に副作用コードを置かない（CLAUDE.md ルール）→ サブモジュールは <code>scripts/{ext}_modules/</code> へ。</li>
+      </ul>
+    </div>
+    <div class="files">
+      <b>影響範囲:</b>
+      <code>scripts/{prompt_expander,vram_recycler,batch_resume,text_replace}.py</code>（いずれも新規）+
+      対応する <code>{ext}_modules/</code>
+    </div>
+  </section>
+
+  <!-- 保留事項 -->
+  <section class="card" id="pending">
+    <h2><span class="idx">⏸</span>保留事項（後日対応）</h2>
+
+    <div class="block note">
+      <span class="tag">Pending-1</span>
+      <p><b>ADetailer + Hires.fix + v3b 併用時の「同じ画像 2 枚」問題</b></p>
+      <p><b>ステータス:</b> §2 完了時点で未着手（2026-05-23 保留判断）</p>
+    </div>
+
+    <div class="block before">
+      <span class="tag">症状</span>
+      <p>ADetailer ON + Hires.fix ON + VRAM Safe Batch v3b の 3 点併用時、
+      <b>1 プロンプトあたり同じ画像が 2 枚生成される</b>。</p>
+    </div>
+
+    <div class="block note">
+      <span class="tag">経緯</span>
+      <p>直前の修正で <code>scripts/vram_safe_batch_modules/image_generator.py</code> の
+      <code>create_fresh_p</code> を <code>copy.copy(original_p)</code> ベースに書き換え、
+      ADetailer / sd-forge-couple 等 alwayson 拡張が初めて動作するようになった。
+      それ以前は ADetailer 自体が起動していなかったため本症状は表面化していなかった。</p>
+    </div>
+
+    <div class="block after">
+      <span class="tag">原因仮説（コード読みで絞り込み、確定未）</span>
+      <ul>
+        <li><b>(A) mask の result.images 追加</b>:
+          <code>modules/processing.py:1100-1113</code> の
+          <code>output_images.append(image_mask)</code> / <code>image_mask_composite</code> 経路。
+          <code>opts.return_mask</code> または <code>opts.return_mask_composite</code> が True で、
+          ADetailer 由来の <code>mask_for_overlay</code> が outer p に伝播している場合に発生。</li>
+        <li><b>(B) ADetailer の "save before image"</b>:
+          <code>extensions/adetailer/scripts/!adetailer.py:919-921</code> の
+          <code>self.save_image(... "-ad-before")</code>。
+          ADetailer 設定 <code>ad_save_images_before</code> が True のとき disk のみに追加保存（gallery には来ない）。</li>
+        <li><b>(C) Hires.fix 前画像の追加保存</b>:
+          <code>modules/processing.py:1441-1448</code> の <code>save_intermediate</code>。
+          WebUI 設定 <code>save_images_before_highres_fix</code> が True のとき disk のみに追加保存（gallery には来ない）。</li>
+        <li><b>(D) その他</b>: gallery 重複なら別経路、disk 重複なら B/C。</li>
+      </ul>
+      <p><code>v3b</code> の <code>collect_result</code> は <code>result.images</code> を 1 件しか extend しないため、
+      gallery の重複は (A) 経路が最も疑わしい。</p>
+    </div>
+
+    <div class="block note">
+      <span class="tag">推奨アプローチ</span>
+      <p>コードを推測修正する前に診断ログを入れて発生箇所を確定させる。</p>
+      <pre><code># scripts/vram_safe_batch_modules/image_generator.py の generate_one() 末尾
+print(f"[v3b-debug] result.images={len(result.images)}, "
+      f"extra_images={len(getattr(result, 'extra_images', []))}, "
+      f"infotexts={len(result.infotexts) if result.infotexts else 0}")
+
+# scripts/vram_safe_batch_v3b.py の _run_internal() ループ初回 1 度だけ
+if global_num == skip_until + 1:
+    from modules.shared import opts
+    print(f"[v3b-debug] return_mask={getattr(opts, 'return_mask', '?')}, "
+          f"return_mask_composite={getattr(opts, 'return_mask_composite', '?')}, "
+          f"save_images_before_highres_fix={getattr(opts, 'save_images_before_highres_fix', '?')}, "
+          f"ad_save_images_before={opts.data.get('ad_save_images_before', '?')}")</code></pre>
+    </div>
+
+    <div class="block after">
+      <span class="tag">修正方針（経路確定後）</span>
+      <ul>
+        <li><b>(A) の場合</b>: v3b の new_p で <code>return_mask</code> / <code>return_mask_composite</code> を強制 False にオーバーライド、または <code>collect_result</code> で <code>result.images[:1]</code> のみ extend</li>
+        <li><b>(B) の場合</b>: コード修正不要、ユーザーに ADetailer の "Save before image" を OFF にする設定案内をドキュメント化</li>
+        <li><b>(C) の場合</b>: 同様にユーザー設定 OFF 案内のみ</li>
+      </ul>
+    </div>
+
+    <div class="block note">
+      <span class="tag">再開判断のトリガー</span>
+      <p>ユーザーから「ADetailer + Hires.fix + v3b の 2 枚問題が業務に支障」との報告があった時点。
+      それまでは ADetailer / Hires.fix のいずれかを OFF にする運用回避で対応。</p>
+    </div>
+
+    <hr style="margin: 28px 0; border: 0; border-top: 1px solid #e5e7eb;">
+
+    <div class="block note">
+      <span class="tag">Pending-2</span>
+      <p><b>§6 ② 置換ツールのフローティングパネル化（VSCode 風 Ctrl+F）</b></p>
+      <p><b>ステータス:</b> 未着手（2026-05-24 保留判断）</p>
+    </div>
+
+    <div class="block after">
+      <span class="tag">スコープ</span>
+      <ul>
+        <li><code>gr.Group(elem_id="vsb-search-panel")</code> + CSS で main prompt 欄右上に <code>position: absolute</code> 配置</li>
+        <li><code>Ctrl+F</code> トグル JS、<code>Esc</code> 閉じる JS（main prompt textarea にフォーカスがあるときのみ横取り）</li>
+        <li>マッチ件数 <code>N / M</code> 表示、<code>▲▼</code> ジャンプ時に <code>setSelectionRange</code> でハイライト</li>
+        <li>置換 / 一括置換 / Undo（既存 <code>text_tools.py</code> の <code>replace_one</code> / <code>replace_all</code> を流用）</li>
+      </ul>
+    </div>
+
+    <div class="block before">
+      <span class="tag">ペンディング理由</span>
+      <p>WebUI の <code>&lt;script&gt;</code> 注入は <code>script_callbacks.on_app_started</code> ベースの static asset 注入が必要で実装工数が大きい。
+      展開順 UI 縮小・§7・§8 を先行し、まとめて着手するほうが効率的。</p>
+    </div>
+
+    <div class="block note">
+      <span class="tag">Cleanup（先行可）</span>
+      <ul>
+        <li><code>scripts/vram_safe_batch_modules/text_tools.py</code> から未使用の
+          <code>generate_preview_html</code> / <code>_colorize_line</code> / <code>_colorize_main</code> / <code>_escape_html</code> / <code>COLORS</code> を削除</li>
+        <li>置換系関数（<code>find_matches</code> / <code>replace_one</code> / <code>replace_all</code> / <code>navigate_match</code> / <code>get_match_info</code>）は §6 ② 着手まで保持</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 追加実施事項 -->
+  <section class="card" id="addons">
+    <h2><span class="idx">＋</span>追加実施事項</h2>
+
+    <div class="block after">
+      <span class="tag">§7 完了（2026-05-24）</span>
+      <p><b>Variable Manager → メインプロンプト 1 クリック投入フロー</b></p>
+      <ul>
+        <li>新規 API <code>GET /vram_safe_batch/api/peek_jobs</code>: <code>_pending_data</code> を読み取り内部バッファをクリアして payload を返す</li>
+        <li>純粋関数 <code>consume_pending_jobs</code> を新モジュール <code>scripts/vram_safe_batch_modules/pending_jobs.py</code> に切り出し</li>
+        <li>UI ボタン「📥 Variable Manager → メイン Prompt に投入」1 ボタンに統合</li>
+        <li>ボタン click は JS のみで完結: fetch → <code>#txt2img_prompt</code> / <code>#img2img_prompt</code> textarea に書き込み → <code>input</code> イベント <code>dispatchEvent</code></li>
+        <li><code>POST /set_jobs</code> / <code>GET /status</code> は互換のため維持</li>
+      </ul>
+    </div>
+
+    <div class="block note">
+      <span class="tag">§7 使用感への影響</span>
+      <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <th style="text-align:left; padding: 6px;">項目</th>
+          <th style="text-align:left; padding: 6px;">修正前</th>
+          <th style="text-align:left; padding: 6px;">修正後</th>
+        </tr>
+        <tr><td style="padding: 6px;">操作回数</td><td style="padding: 6px;">2 クリック + 手動コピペ</td><td style="padding: 6px;">1 クリック</td></tr>
+        <tr><td style="padding: 6px;">反映先</td><td style="padding: 6px;">v3b 専用 textbox（§1 で廃止済み）</td><td style="padding: 6px;"><code>#txt2img_prompt</code> / <code>#img2img_prompt</code> textarea</td></tr>
+        <tr><td style="padding: 6px;">ステータス表示</td><td style="padding: 6px;">情報文字列のみ</td><td style="padding: 6px;">投入結果プレビュー（最初の 60 文字）</td></tr>
+      </table>
+    </div>
+
+    <div class="files">
+      <b>影響範囲:</b>
+      追加 <code>scripts/vram_safe_batch_modules/pending_jobs.py</code>、
+      変更 <code>scripts/vram_safe_batch_v3b.py</code>（API 1 個追加、UI ボタンラベルと JS、import 1 行追加、旧ハンドラ削除）、
+      追加 <code>tests/test_pending_jobs.py</code>（5 ケース、99 テスト全件パス）
+    </div>
+
+    <div class="block after">
+      <span class="tag">§6 ①③④ 完了（2026-05-24）</span>
+      <ul>
+        <li>① 生成リスト textbox / カラープレビュー HTML 廃止 → §1 で完了済み</li>
+        <li>③ 上部使い方 Markdown を <code>📖 記法・使い方</code> Accordion 化済み（7 サブセクション構成）</li>
+        <li>④「途中再開」を <code>📂 途中再開</code> Accordion 化済み、Variable Manager 連携ボタンは 1 ボタンに整理済み</li>
+      </ul>
+    </div>
+
+    <div class="block note">
+      <span class="tag">展開順 UI 縮小化（2026-05-24、§6 ② 代替の優先タスク）</span>
+      <p>v3b の「📊 展開順」セクションが縦に 7 ブロック (~400px) 占有しメインプロンプト欄を圧迫していた。
+      §6 ② フローティングパネル化が工数大でペンディングのため、より即時効果の高い本タスクを優先実施。</p>
+    </div>
+
+    <div class="block before">
+      <span class="tag">BEFORE</span>
+      <p>7 ブロック構成: 見出し / 説明 / Dataframe / 並び替えボタン行 / 追加行 / 取得+プレビュー行 / プレビュー欄</p>
+    </div>
+
+    <div class="block after">
+      <span class="tag">AFTER</span>
+      <p>4 ブロック構成: 見出し兼説明 / Dataframe / 並び替え+追加 1 行統合 / 取得+プレビュー+プレビュー欄 1 行統合</p>
+      <ul>
+        <li>見出し <code>### 📊 展開順</code> と説明 Markdown 2 ブロックを 1 行の <b>太字 + ヒント</b> に統合</li>
+        <li>並び替えボタン（▲▼×⟲）を 1 文字アイコン化、<code>scale=0, min_width=44</code> で正方形気味に並べ「追加」入力欄も同一行へ</li>
+        <li>「🔄 メインから取得」「🔢 枚数プレビュー」とプレビュー Textbox を 1 行に詰め、<code>container=False</code> + <code>show_label=False</code> で余白削減</li>
+        <li>Dataframe は <code>label="展開順"</code> を消し（見出しに統合）→ <code>show_label=False</code></li>
+      </ul>
+    </div>
+
+    <div class="files">
+      <b>影響範囲:</b>
+      <code>scripts/vram_safe_batch_v3b.py</code>（<code>ui()</code> 内、400-444 行付近のみ。約 44 行 → 約 30 行）。
+      イベントハンドラ / 変数名 / elem_id は完全に維持、ロジック・テストへの影響なし。
+    </div>
+
+    <div class="block note">
+      <span class="tag">使用感への影響</span>
+      <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <th style="text-align:left; padding: 6px;">項目</th>
+          <th style="text-align:left; padding: 6px;">修正前</th>
+          <th style="text-align:left; padding: 6px;">修正後</th>
+        </tr>
+        <tr><td style="padding: 6px;">展開順セクション縦幅</td><td style="padding: 6px;">7 ブロック (~400px)</td><td style="padding: 6px;">4 ブロック (~200px)</td></tr>
+        <tr><td style="padding: 6px;">メインプロンプト欄との視界距離</td><td style="padding: 6px;">遠い</td><td style="padding: 6px;">近い</td></tr>
+        <tr><td style="padding: 6px;">ボタンラベル</td><td style="padding: 6px;">「▲ 上へ」等 文字付き</td><td style="padding: 6px;">「▲」等 アイコンのみ</td></tr>
+        <tr><td style="padding: 6px;">プレビュー Textbox</td><td style="padding: 6px;"><code>label="プレビュー"</code> ラベル付き</td><td style="padding: 6px;">placeholder で兼用、行内</td></tr>
+      </table>
+    </div>
+
+    <div class="block before">
+      <span class="tag">確認事項（L2）</span>
+      <ul>
+        <li>▲▼×⟲ ➕ のボタン挙動が変わらないこと</li>
+        <li>🔄 メインから取得 → Dataframe 更新 → 🔢 枚数プレビュー → プレビュー欄表示 のフローが壊れていないこと</li>
+        <li><code>Alt+↑↓</code> 並び替え・<code>Delete</code> 削除のショートカット動作不変</li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    このサマリは現状の整理用。次の改修プランはユーザー指示を待って機能ごとに再構築する。
+  </footer>
+
+</div>
+</body>
+</html>
