@@ -1,0 +1,111 @@
+{
+  "_comment": "vars/variables.json のサンプル。実体は forge ルート直下の vars/variables.json として配置する。schema_version は v2。Prompt Expander が起動時に v1 → v2 自動マイグレーションする。",
+  "schema_version": 2,
+  "categories": [
+    {
+      "id": 1,
+      "name": "画質",
+      "children": [],
+      "variables": [
+        {
+          "id": 101,
+          "name": "$画質_最高",
+          "positive": "masterpiece, best quality, ultra-detailed, very aesthetic, absurdres",
+          "negative": "",
+          "updated_at": "2026-05-31T00:00:00Z"
+        },
+        {
+          "id": 102,
+          "name": "$画質_アニメ系",
+          "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest",
+          "negative": "",
+          "updated_at": "2026-05-31T00:00:00Z"
+        },
+        {
+          "id": 103,
+          "name": "$画質_リアル系",
+          "positive": "photorealistic, hyperrealistic, RAW photo, ultra detailed skin, film grain",
+          "negative": "",
+          "updated_at": "2026-05-31T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "構図",
+      "children": [
+        {
+          "id": 3,
+          "name": "ポートレート",
+          "children": [],
+          "variables": [
+            {
+              "id": 201,
+              "name": "$ポートレート_上半身",
+              "positive": "upper body, looking at viewer, soft lighting",
+              "negative": "lowres, blurry",
+              "updated_at": "2026-05-31T00:00:00Z"
+            },
+            {
+              "id": 202,
+              "name": "$ポートレート_顔アップ",
+              "positive": "close-up, face focus, detailed eyes",
+              "negative": "wide shot",
+              "updated_at": "2026-05-31T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "name": "全身",
+          "children": [],
+          "variables": [
+            {
+              "id": 203,
+              "name": "$全身_立ち姿",
+              "positive": "full body, standing, dynamic pose, detailed background",
+              "negative": "cropped",
+              "updated_at": "2026-05-31T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "variables": []
+    },
+    {
+      "id": 5,
+      "name": "スタイル",
+      "children": [],
+      "variables": [
+        {
+          "id": 301,
+          "name": "$スタイル_水彩",
+          "positive": "watercolor painting, soft brush strokes, paper texture",
+          "negative": "3d, cgi",
+          "updated_at": "2026-05-31T00:00:00Z"
+        },
+        {
+          "id": 302,
+          "name": "$スタイル_油絵",
+          "positive": "oil painting, thick brush strokes, canvas texture, classical",
+          "negative": "digital art",
+          "updated_at": "2026-05-31T00:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "ネガティブ",
+      "children": [],
+      "variables": [
+        {
+          "id": 401,
+          "name": "$NEG_基本",
+          "positive": "",
+          "negative": "lowres, blurry, jpeg artifacts, bad anatomy, bad hands, extra fingers, watermark, signature",
+          "updated_at": "2026-05-31T00:00:00Z"
+        }
+      ]
+    }
+  ]
+}

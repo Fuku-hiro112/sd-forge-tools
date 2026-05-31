@@ -1,0 +1,165 @@
+{
+  "exportedAt": "2026-05-10T00:00:00.000Z",
+  "_note": "SDイラスト生成でよく使う単語プリセット。Merge Import で取り込み、既存変数は保持されます。重複名はスキップ。",
+  "nextId": 1,
+  "lastCategoryId": null,
+  "categories": [
+    {
+      "id": 1, "name": "🎨_プリセット_画質",
+      "children": [],
+      "variables": [
+        { "id": 101, "name": "$画質_最高", "positive": "masterpiece, best quality, ultra-detailed, very aesthetic, absurdres", "negative": "" },
+        { "id": 102, "name": "$画質_高解像度", "positive": "8k, highres, ultra high res, sharp focus, intricate details", "negative": "" },
+        { "id": 103, "name": "$画質_アニメ系", "positive": "masterpiece, best quality, amazing quality, very aesthetic, newest", "negative": "" },
+        { "id": 104, "name": "$画質_リアル系", "positive": "photorealistic, hyperrealistic, RAW photo, ultra detailed skin, film grain", "negative": "" }
+      ]
+    },
+    {
+      "id": 2, "name": "🖌_プリセット_画風",
+      "children": [],
+      "variables": [
+        { "id": 201, "name": "$画風_アニメ", "positive": "anime style, anime coloring, cel shading", "negative": "" },
+        { "id": 202, "name": "$画風_イラスト", "positive": "illustration, official art, key visual", "negative": "" },
+        { "id": 203, "name": "$画風_水彩", "positive": "watercolor, watercolor painting, soft colors, paper texture", "negative": "" },
+        { "id": 204, "name": "$画風_厚塗り", "positive": "oil painting, thick paint, impasto, painterly", "negative": "" },
+        { "id": 205, "name": "$画風_線画", "positive": "lineart, monochrome, sketch, pencil drawing", "negative": "" },
+        { "id": 206, "name": "$画風_セミリアル", "positive": "semi-realistic, detailed face, soft lighting", "negative": "" }
+      ]
+    },
+    {
+      "id": 3, "name": "📐_プリセット_構図",
+      "children": [],
+      "variables": [
+        { "id": 301, "name": "$構図_顔アップ", "positive": "close-up, face focus, portrait", "negative": "" },
+        { "id": 302, "name": "$構図_バストアップ", "positive": "upper body, bust shot", "negative": "" },
+        { "id": 303, "name": "$構図_全身", "positive": "full body, full shot, standing", "negative": "" },
+        { "id": 304, "name": "$構図_俯瞰", "positive": "from above, high angle, looking down", "negative": "" },
+        { "id": 305, "name": "$構図_煽り", "positive": "from below, low angle, looking up", "negative": "" },
+        { "id": 306, "name": "$構図_横顔", "positive": "from side, profile view", "negative": "" },
+        { "id": 307, "name": "$構図_背中越し", "positive": "from behind, back view, over the shoulder", "negative": "" },
+        { "id": 308, "name": "$構図_ダッチアングル", "positive": "dutch angle, tilted shot, dynamic angle", "negative": "" }
+      ]
+    },
+    {
+      "id": 4, "name": "💡_プリセット_ライティング",
+      "children": [],
+      "variables": [
+        { "id": 401, "name": "$光_自然光", "positive": "natural lighting, sunlight, soft light", "negative": "" },
+        { "id": 402, "name": "$光_映画的", "positive": "cinematic lighting, dramatic lighting, volumetric lighting", "negative": "" },
+        { "id": 403, "name": "$光_逆光", "positive": "backlight, rim light, silhouette", "negative": "" },
+        { "id": 404, "name": "$光_朝", "positive": "morning light, golden hour, warm light", "negative": "" },
+        { "id": 405, "name": "$光_夕焼け", "positive": "sunset, orange sky, golden hour, warm tone", "negative": "" },
+        { "id": 406, "name": "$光_夜", "positive": "night, moonlight, neon lights, low light", "negative": "" },
+        { "id": 407, "name": "$光_スタジオ", "positive": "studio lighting, soft box, even lighting", "negative": "" }
+      ]
+    },
+    {
+      "id": 5, "name": "😊_プリセット_表情",
+      "children": [],
+      "variables": [
+        { "id": 501, "name": "$表情_笑顔", "positive": "smile, smiling, happy", "negative": "" },
+        { "id": 502, "name": "$表情_満面笑", "positive": "grin, big smile, open mouth, teeth showing", "negative": "" },
+        { "id": 503, "name": "$表情_照れ", "positive": "blush, embarrassed, shy", "negative": "" },
+        { "id": 504, "name": "$表情_ジト目", "positive": "half-closed eyes, jitome, unamused", "negative": "" },
+        { "id": 505, "name": "$表情_驚き", "positive": "surprised, wide eyes, open mouth, shocked", "negative": "" },
+        { "id": 506, "name": "$表情_泣き", "positive": "tears, crying, teary eyes, sad", "negative": "" },
+        { "id": 507, "name": "$表情_怒り", "positive": "angry, frown, glaring", "negative": "" },
+        { "id": 508, "name": "$表情_クール", "positive": "expressionless, cool, serious", "negative": "" },
+        { "id": 509, "name": "$表情_ウインク", "positive": "wink, one eye closed, tongue out", "negative": "" }
+      ]
+    },
+    {
+      "id": 6, "name": "🤸_プリセット_ポーズ",
+      "children": [],
+      "variables": [
+        { "id": 601, "name": "$ポーズ_立ち", "positive": "standing, arms at sides", "negative": "" },
+        { "id": 602, "name": "$ポーズ_座り", "positive": "sitting, sitting on chair", "negative": "" },
+        { "id": 603, "name": "$ポーズ_体育座り", "positive": "hugging own legs, knees up", "negative": "" },
+        { "id": 604, "name": "$ポーズ_寝そべり", "positive": "lying on stomach, lying down", "negative": "" },
+        { "id": 605, "name": "$ポーズ_ジャンプ", "positive": "jumping, mid-air, dynamic pose", "negative": "" },
+        { "id": 606, "name": "$ポーズ_腰に手", "positive": "hand on hip, hands on hips, confident pose", "negative": "" },
+        { "id": 607, "name": "$ポーズ_ピース", "positive": "peace sign, v sign, looking at viewer", "negative": "" },
+        { "id": 608, "name": "$ポーズ_振り向き", "positive": "looking back, turning around, looking at viewer", "negative": "" },
+        { "id": 609, "name": "$ポーズ_スカートつまみ", "positive": "skirt hold, curtsy", "negative": "" }
+      ]
+    },
+    {
+      "id": 7, "name": "💇_プリセット_髪",
+      "children": [],
+      "variables": [
+        { "id": 701, "name": "$髪型_ロング", "positive": "long hair, straight hair", "negative": "" },
+        { "id": 702, "name": "$髪型_ショート", "positive": "short hair, bob cut", "negative": "" },
+        { "id": 703, "name": "$髪型_ツインテール", "positive": "twintails, twin tails", "negative": "" },
+        { "id": 704, "name": "$髪型_ポニーテール", "positive": "ponytail, high ponytail", "negative": "" },
+        { "id": 705, "name": "$髪型_お団子", "positive": "hair bun, double bun", "negative": "" },
+        { "id": 706, "name": "$髪型_三つ編み", "positive": "braid, braided hair, twin braids", "negative": "" },
+        { "id": 707, "name": "$髪型_ボブ", "positive": "bob cut, short bob", "negative": "" },
+        { "id": 708, "name": "$髪色_黒", "positive": "black hair", "negative": "" },
+        { "id": 709, "name": "$髪色_茶", "positive": "brown hair", "negative": "" },
+        { "id": 710, "name": "$髪色_金", "positive": "blonde hair", "negative": "" },
+        { "id": 711, "name": "$髪色_銀", "positive": "silver hair, white hair", "negative": "" },
+        { "id": 712, "name": "$髪色_ピンク", "positive": "pink hair", "negative": "" },
+        { "id": 713, "name": "$髪色_青", "positive": "blue hair", "negative": "" }
+      ]
+    },
+    {
+      "id": 8, "name": "👁_プリセット_目",
+      "children": [],
+      "variables": [
+        { "id": 801, "name": "$瞳色_青", "positive": "blue eyes", "negative": "" },
+        { "id": 802, "name": "$瞳色_赤", "positive": "red eyes", "negative": "" },
+        { "id": 803, "name": "$瞳色_緑", "positive": "green eyes", "negative": "" },
+        { "id": 804, "name": "$瞳色_金", "positive": "yellow eyes, golden eyes", "negative": "" },
+        { "id": 805, "name": "$瞳色_紫", "positive": "purple eyes, violet eyes", "negative": "" },
+        { "id": 806, "name": "$瞳色_茶", "positive": "brown eyes", "negative": "" },
+        { "id": 807, "name": "$瞳_ハイライト強", "positive": "sparkling eyes, detailed eyes, beautiful detailed eyes", "negative": "" },
+        { "id": 808, "name": "$瞳_ヘテロクロミア", "positive": "heterochromia", "negative": "" }
+      ]
+    },
+    {
+      "id": 9, "name": "👗_プリセット_服装",
+      "children": [],
+      "variables": [
+        { "id": 901, "name": "$服_制服", "positive": "school uniform, blazer, pleated skirt", "negative": "" },
+        { "id": 902, "name": "$服_セーラー服", "positive": "sailor uniform, sailor collar", "negative": "" },
+        { "id": 903, "name": "$服_私服カジュアル", "positive": "casual clothes, hoodie, jeans", "negative": "" },
+        { "id": 904, "name": "$服_ワンピース", "positive": "dress, white dress, summer dress", "negative": "" },
+        { "id": 905, "name": "$服_メイド服", "positive": "maid, maid apron, maid headdress", "negative": "" },
+        { "id": 906, "name": "$服_着物", "positive": "kimono, japanese clothes, obi", "negative": "" },
+        { "id": 907, "name": "$服_浴衣", "positive": "yukata, summer festival, obi", "negative": "" },
+        { "id": 908, "name": "$服_水着", "positive": "swimsuit, bikini", "negative": "" },
+        { "id": 909, "name": "$服_スーツ", "positive": "business suit, formal wear, necktie", "negative": "" },
+        { "id": 910, "name": "$服_パーカー", "positive": "hoodie, oversized hoodie", "negative": "" }
+      ]
+    },
+    {
+      "id": 10, "name": "🌆_プリセット_背景",
+      "children": [],
+      "variables": [
+        { "id": 1001, "name": "$背景_教室", "positive": "classroom, school desk, blackboard, indoors", "negative": "" },
+        { "id": 1002, "name": "$背景_廊下", "positive": "school hallway, lockers, indoors", "negative": "" },
+        { "id": 1003, "name": "$背景_街中", "positive": "city street, urban, buildings, daytime", "negative": "" },
+        { "id": 1004, "name": "$背景_カフェ", "positive": "cafe, coffee shop, indoor cafe, warm light", "negative": "" },
+        { "id": 1005, "name": "$背景_部屋", "positive": "bedroom, indoors, cozy room", "negative": "" },
+        { "id": 1006, "name": "$背景_海辺", "positive": "beach, ocean, blue sky, sand", "negative": "" },
+        { "id": 1007, "name": "$背景_公園", "positive": "park, trees, bench, outdoors", "negative": "" },
+        { "id": 1008, "name": "$背景_森", "positive": "forest, trees, sunlight through leaves", "negative": "" },
+        { "id": 1009, "name": "$背景_雪景色", "positive": "snow, winter, snowy landscape", "negative": "" },
+        { "id": 1010, "name": "$背景_桜", "positive": "cherry blossoms, sakura, falling petals, spring", "negative": "" },
+        { "id": 1011, "name": "$背景_夜空", "positive": "night sky, stars, milky way, moon", "negative": "" },
+        { "id": 1012, "name": "$背景_白背景", "positive": "simple background, white background", "negative": "" }
+      ]
+    },
+    {
+      "id": 11, "name": "🚫_プリセット_ネガティブ",
+      "children": [],
+      "variables": [
+        { "id": 1101, "name": "$!ネガ_共通", "positive": "", "negative": "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry" },
+        { "id": 1102, "name": "$!ネガ_アニメ強化", "positive": "", "negative": "(worst quality, low quality:1.4), (bad anatomy:1.2), bad hands, missing fingers, extra fingers, extra arms, extra legs, fused fingers, mutated hands, deformed, ugly, blurry" },
+        { "id": 1103, "name": "$!ネガ_リアル強化", "positive": "", "negative": "cartoon, anime, illustration, painting, drawing, 3d, cgi, plastic skin, doll, deformed face, asymmetric eyes, lowres, blurry, jpeg artifacts" },
+        { "id": 1104, "name": "$!ネガ_手指", "positive": "", "negative": "bad hands, missing fingers, extra fingers, fused fingers, mutated hands, malformed hands, poorly drawn hands" },
+        { "id": 1105, "name": "$!ネガ_顔崩れ", "positive": "", "negative": "bad face, deformed face, asymmetric face, asymmetric eyes, cross-eyed, ugly face" }
+      ]
+    }
+  ]
+}

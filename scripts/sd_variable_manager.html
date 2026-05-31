@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SD Variable Manager</title>
+<style>
+  /* ===== Atelier Terminal — type & defaults ===== */
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,400;1,500;1,600&family=IBM+Plex+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  /* Default theme: Graphite — 黒鉛と象牙 */
+  :root {
+    --bg-primary:#17171c; --bg-secondary:#1e1e24; --bg-tertiary:#26262e;
+    --bg-hover:#2e2e36; --bg-input:#1b1b21;
+    --text-primary:#ede8dc; --text-secondary:#a8a298; --text-muted:#6a655d;
+    --accent:#e8b04a; --accent-hover:#f0c478; --accent-dim:rgba(232,176,74,0.14);
+    --positive:#9ec98a; --positive-dim:rgba(158,201,138,0.13);
+    --negative:#e87662; --negative-dim:rgba(232,118,98,0.13);
+    --warning:#d8a45c;
+    --border:rgba(237,232,220,0.09); --border-light:rgba(237,232,220,0.18);
+    --shadow:rgba(0,0,0,0.5);
+    --radius:6px; --radius-sm:3px; --radius-lg:10px;
+    --transition:180ms cubic-bezier(0.2,0,0,1);
+    --grid:rgba(237,232,220,0.025);
+    --builder-height:280px;
+  }
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    font-family:'IBM Plex Sans JP','Noto Sans JP',system-ui,sans-serif;
+    font-weight:400; font-size:13.5px; line-height:1.5;
+    background:var(--bg-primary); color:var(--text-primary);
+    overflow:hidden; -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+    font-feature-settings:"kern";
+    background-image:
+      linear-gradient(var(--grid) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:32px 32px;
+  }
+  body::before {
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:radial-gradient(120% 80% at 50% 0%,transparent 50%,rgba(0,0,0,0.18) 100%);
+  }
+
+  /* Layout */
+  .app { position:relative; z-index:1; display:grid; grid-template-rows:auto 1fr auto; grid-template-columns:288px 1fr; height:100vh; }
+  .header {
+    grid-column:1/-1; background:var(--bg-secondary); border-bottom:1px solid var(--border);
+    padding:14px 26px; display:flex; align-items:center; justify-content:space-between; gap:20px;
+    position:relative;
+  }
+  .header::after {
+    content:""; position:absolute; left:0; right:0; bottom:-1px; height:1px;
+    background:linear-gradient(90deg,transparent,var(--accent) 18%,var(--accent) 82%,transparent);
+    opacity:0.35;
+  }
+  .header h1 {
+    font-family:'Fraunces',Georgia,serif; font-style:italic; font-weight:500;
+    font-size:22px; line-height:1; letter-spacing:0.2px; color:var(--text-primary);
+    display:flex; align-items:baseline; gap:10px;
+  }
+  .header h1::before {
+    content:""; width:7px; height:7px; border-radius:50%;
+    background:var(--accent); box-shadow:0 0 12px var(--accent);
+    display:inline-block; transform:translateY(-2px);
+  }
+  .header-actions { display:flex; gap:6px; align-items:center; }
+  .sync-badge {
+    display:inline-flex; align-items:center; padding:3px 10px; border-radius:12px;
+    font-size:11.5px; font-weight:500; cursor:default;
+    background:var(--bg-tertiary); color:var(--text-secondary); border:1px solid var(--border);
+    transition:background var(--transition), color var(--transition);
+    white-space:nowrap;
+  }
+  .sync-badge.sync-init    { opacity:0.6; }
+  .sync-badge.sync-syncing { background:rgba(96,165,250,0.14); color:#60a5fa; border-color:rgba(96,165,250,0.3); }
+  .sync-badge.sync-ok      { background:rgba(158,201,138,0.15); color:#9ec98a; border-color:rgba(158,201,138,0.35); }
+  .sync-badge.sync-offline { background:rgba(216,164,92,0.15); color:#d8a45c; border-color:rgba(216,164,92,0.35); }
+  .sync-badge.sync-error   { background:rgba(232,118,98,0.15); color:#e87662; border-color:rgba(232,118,98,0.35); }
+
+  /* Sidebar */
+  .sidebar { background:var(--bg-secondary); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; grid-row:2/4; }
+  .sidebar-header { padding:14px 18px 10px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  .sidebar-header h2 { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:500; color:var(--text-muted); text-transform:uppercase; letter-spacing:2.5px; }
+  .sidebar-actions { display:flex; gap:1px; }
+  .tree-container { flex:1; overflow-y:auto; padding:8px 6px 16px; }
+  .tree-node { user-select:none; position:relative; }
+  .tree-node-header {
+    display:flex; align-items:center; gap:6px; padding:7px 10px;
+    border-radius:var(--radius-sm); cursor:pointer; transition:all var(--transition);
+    font-size:13px; color:var(--text-primary); position:relative;
+  }
+  .tree-node-header::before {
+    content:""; position:absolute; left:0; top:6px; bottom:6px; width:2px;
+    background:var(--accent); border-radius:1px;
+    transform:scaleY(0); transform-origin:center; transition:transform var(--transition);
+  }
+  .tree-node-header:hover { background:var(--bg-tertiary); }
+  .tree-node-header.selected { background:var(--accent-dim); color:var(--text-primary); }
+  .tree-node-header.selected::before { transform:scaleY(1); }
+  .tree-node-header .arrow { width:14px; font-size:9px; color:var(--text-muted); transition:transform var(--transition); flex-shrink:0; }
+  .tree-node-header .arrow.open { transform:rotate(90deg); }
+  .tree-node-header .arrow.leaf { visibility:hidden; }
+  .tree-node-header .node-icon { font-size:13px; flex-shrink:0; opacity:0.85; }
+  .tree-node-header .node-label { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tree-node-header .node-count {
+    font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:500;
+    color:var(--text-muted); background:transparent; padding:0 2px; flex-shrink:0; border:none;
+  }
+  .tree-children { padding-left:14px; display:none; position:relative; }
+  .tree-children::before {
+    content:""; position:absolute; left:13px; top:2px; bottom:2px; width:0;
+    border-left:1px dotted var(--border-light);
+  }
+  .tree-children.open { display:block; }
+  .tree-node-header.drag-over-above { box-shadow:inset 0 2px 0 var(--accent); }
+  .tree-node-header.drag-over-below { box-shadow:inset 0 -2px 0 var(--accent); }
+  .tree-node-header.drag-over-into { background:var(--accent-dim); outline:1px dashed var(--accent); }
+  .tree-node-header.var-drop-hint { background:var(--accent-dim); }
+
+  /* Main */
+  .main { display:flex; flex-direction:column; overflow:hidden; background:var(--bg-primary); }
+  .main-toolbar { padding:12px 22px; border-bottom:1px solid var(--border); display:flex; gap:12px; align-items:center; background:var(--bg-secondary); }
+  .main-toolbar .path {
+    font-family:'Fraunces',serif; font-style:italic; font-size:15px; color:var(--text-secondary);
+    flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:0.3px;
+  }
+  .main-toolbar .path span { color:var(--text-primary); cursor:pointer; font-style:normal; font-family:'IBM Plex Sans JP',sans-serif; font-weight:500; }
+  .main-toolbar .path span:hover { color:var(--accent); }
+  .search-box { position:relative; }
+  .search-box input {
+    background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius);
+    color:var(--text-primary); padding:7px 12px 7px 30px; font-size:12px; width:220px;
+    outline:none; transition:all var(--transition); font-family:inherit;
+  }
+  .search-box input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim); }
+  .search-box::before {
+    content:'⌕'; position:absolute; left:10px; top:50%; transform:translateY(-50%);
+    font-size:14px; color:var(--text-muted);
+  }
+  .variable-list { flex:1; overflow-y:auto; padding:18px 22px 22px; }
+
+  /* Variable cards */
+  .variable-card {
+    background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius);
+    margin-bottom:8px; transition:all var(--transition); position:relative; overflow:hidden;
+  }
+  .variable-card::before {
+    content:""; position:absolute; left:0; top:0; bottom:0; width:2px;
+    background:var(--accent); transform:scaleY(0); transform-origin:top; transition:transform var(--transition);
+  }
+  .variable-card:hover { border-color:var(--border-light); }
+  .variable-card:hover::before { transform:scaleY(1); }
+  .variable-card.dragging { opacity:0.5; border-style:dashed; }
+  .variable-card-header { padding:12px 16px; display:flex; align-items:center; gap:10px; cursor:pointer; }
+  .var-drag-handle { font-size:14px; color:var(--text-muted); cursor:grab; flex-shrink:0; opacity:0; transition:opacity var(--transition); }
+  .variable-card:hover .var-drag-handle { opacity:1; }
+  .var-name {
+    font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600;
+    color:var(--text-primary); flex-shrink:0; letter-spacing:0.2px;
+  }
+  .var-preview { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .var-actions { display:flex; gap:1px; opacity:0; transition:opacity var(--transition); flex-shrink:0; }
+  .variable-card:hover .var-actions { opacity:1; }
+  .variable-card-body { padding:0 16px 14px; display:none; }
+  .variable-card-body.open { display:block; }
+  .value-section { margin-top:10px; }
+  .value-label {
+    font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:500;
+    text-transform:uppercase; letter-spacing:2.2px; margin-bottom:6px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .value-label::before { content:""; width:5px; height:5px; border-radius:50%; background:currentColor; }
+  .value-label.positive { color:var(--positive); }
+  .value-label.negative { color:var(--negative); }
+  .value-content {
+    font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.65;
+    padding:10px 12px; border-radius:var(--radius-sm); word-break:break-all;
+    white-space:pre-wrap; color:var(--text-primary); background:var(--bg-input);
+    border-left:2px solid var(--border-light);
+  }
+  .value-content.positive { background:var(--positive-dim); border-left-color:var(--positive); }
+  .value-content.negative { background:var(--negative-dim); border-left-color:var(--negative); }
+
+  /* ===== Builder Panel ===== */
+  .builder-panel {
+    grid-column:2/-1; background:var(--bg-secondary); border-top:1px solid var(--border);
+    display:flex; flex-direction:column; height:var(--builder-height);
+    transition:height var(--transition); overflow:hidden; position:relative;
+  }
+  .builder-panel::before, .builder-panel::after {
+    content:""; position:absolute; top:6px; width:10px; height:10px;
+    border-top:1.5px solid var(--accent); pointer-events:none; z-index:2;
+  }
+  .builder-panel::before { left:6px; border-left:1.5px solid var(--accent); }
+  .builder-panel::after { right:6px; border-right:1.5px solid var(--accent); }
+  .builder-panel.collapsed { height:42px; }
+  .builder-resize-handle {
+    height:5px; cursor:row-resize; flex-shrink:0; background:transparent;
+    transition:background 0.15s; position:relative; z-index:3; margin-top:-2px;
+  }
+  .builder-resize-handle:hover, .builder-resize-handle.active { background:var(--accent-dim); }
+  .builder-header {
+    padding:11px 22px; display:flex; align-items:center; gap:16px;
+    border-bottom:1px solid var(--border); cursor:pointer; flex-shrink:0;
+  }
+  .builder-header h2 {
+    font-family:'Fraunces',serif; font-style:italic; font-weight:500;
+    font-size:15px; color:var(--text-primary); flex:1; letter-spacing:0.3px;
+  }
+  .builder-header .toggle-icon { font-size:9px; color:var(--text-muted); transition:transform var(--transition); }
+  .builder-panel.collapsed .toggle-icon { transform:rotate(180deg); }
+  .builder-header-right { display:flex; align-items:center; gap:8px; }
+  .builder-body { flex:1; display:flex; overflow:hidden; }
+  .builder-columns { flex:1; display:flex; flex-direction:column; overflow:hidden; border-right:1px solid var(--border); }
+
+  /* 行タブ */
+  .builder-rows-toolbar { padding:6px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:6px; background:var(--bg-primary); flex-shrink:0; }
+  .row-tabs { display:flex; flex:1; gap:0; overflow-x:auto; align-items:center; }
+  .row-tab {
+    padding:4px 12px; border-radius:999px; font-size:11px; cursor:grab;
+    background:transparent; border:1px solid var(--border); color:var(--text-muted);
+    transition:all var(--transition); white-space:nowrap; font-weight:500;
+  }
+  .row-tab:hover { border-color:var(--border-light); color:var(--text-secondary); }
+  .row-tab.active { background:var(--bg-secondary); color:var(--text-primary); border-color:var(--accent); }
+  .row-tab-drop { display:inline-block; width:3px; height:20px; vertical-align:middle; margin:0 1px; border-radius:2px; transition:all 0.15s; }
+  .row-tab-drop.drag-over { width:20px; background:var(--accent-dim); border:1px dashed var(--accent); }
+  .row-tab-close { font-size:9px; opacity:0.5; cursor:pointer; margin-left:4px; }
+  .row-tab-close:hover { opacity:1; color:var(--negative); }
+
+  /* 列タブ */
+  .builder-columns-toolbar { padding:8px 16px; display:flex; gap:6px; align-items:center; border-bottom:1px solid var(--border); }
+  .builder-columns-toolbar .col-tabs { display:flex; gap:0; flex:1; overflow-x:auto; align-items:center; }
+  .col-sep { color:var(--warning); font-size:14px; font-weight:600; padding:0 4px; user-select:none; flex-shrink:0; font-family:'Fraunces',serif; font-style:italic; }
+  .col-tab {
+    padding:5px 12px; border-radius:999px; font-size:11px; cursor:grab;
+    background:transparent; border:1px solid var(--border); color:var(--text-secondary);
+    transition:all var(--transition); white-space:nowrap; display:flex; align-items:center; gap:6px; font-weight:500;
+  }
+  .col-tab:hover { border-color:var(--border-light); color:var(--text-primary); }
+  .col-tab.active { background:var(--accent-dim); border-color:var(--accent); color:var(--text-primary); }
+  .col-tab.dragging { opacity:0.4; }
+  .col-tab.shuffle-group { border-style:dashed; border-color:var(--warning); }
+  .col-tab.chip-drop-target { background:var(--accent); color:var(--bg-primary); border-color:var(--accent); }
+  .col-tab .col-tab-close { font-size:10px; opacity:0.5; cursor:pointer; margin-left:2px; }
+  .col-tab .col-tab-close:hover { opacity:1; color:var(--negative); }
+  .col-tab .col-tab-count { font-size:10px; color:var(--text-muted); font-family:'JetBrains Mono',monospace; }
+  .col-tab .col-tab-shuffle { font-size:10px; color:var(--warning); }
+  .col-tab-drop { display:inline-block; width:4px; height:24px; vertical-align:middle; margin:0 2px; border-radius:2px; transition:all 0.15s; }
+  .col-tab-drop.drag-over { width:24px; background:var(--accent-dim); border:1px dashed var(--accent); }
+  .builder-columns-content { flex:1; overflow-y:auto; padding:12px 16px; }
+  .builder-col-empty { color:var(--text-muted); font-size:12px; padding:18px 0; text-align:center; font-family:'Fraunces',serif; font-style:italic; }
+
+  /* チップ */
+  .col-var-chip {
+    display:inline-flex; align-items:center; gap:4px; background:var(--bg-tertiary);
+    border:1px solid var(--border); border-radius:var(--radius);
+    padding:5px 10px; font-family:'JetBrains Mono',monospace; font-size:11px;
+    margin:3px 6px 3px 0; color:var(--text-primary); cursor:grab; transition:all var(--transition);
+  }
+  .col-var-chip:hover { border-color:var(--accent); }
+  .col-var-chip.dragging { opacity:0.4; }
+  .col-var-chip.comma-group { background:var(--accent-dim); border-color:var(--accent); }
+  .col-var-chip.merge-target { background:var(--positive-dim); border:1px dashed var(--positive); border-radius:var(--radius); }
+  .chip-var { cursor:default; }
+  .chip-comma { color:var(--warning); font-weight:700; margin:0 1px; }
+  .chip-split { font-size:10px; cursor:pointer; color:var(--accent); margin-left:3px; opacity:0.7; }
+  .chip-split:hover { opacity:1; }
+  .chip-remove { font-size:10px; cursor:pointer; color:var(--text-muted); margin-left:3px; }
+  .chip-remove:hover { color:var(--negative); }
+  .chip-drop-zone { display:inline-block; width:20px; height:22px; vertical-align:middle; margin:2px 0; border-radius:var(--radius-sm); transition:all 0.15s; }
+  .chip-drop-zone.drag-over { width:44px; background:var(--accent-dim); border:1px dashed var(--accent); }
+
+  /* クイック入力 */
+  .quick-var-input {
+    display:inline-block; background:transparent; border:1px dashed var(--border-light);
+    border-radius:var(--radius-sm); color:var(--text-primary);
+    font-family:'JetBrains Mono',monospace; font-size:11px; padding:4px 9px;
+    width:140px; outline:none; margin:2px 4px; transition:all var(--transition);
+  }
+  .quick-var-input:focus { border-color:var(--accent); border-style:solid; box-shadow:0 0 0 3px var(--accent-dim); }
+
+
+  /* 記号パレット */
+  .symbol-palette { padding:6px 14px; border-bottom:1px solid var(--border); display:flex; gap:5px; align-items:center; flex-wrap:wrap; flex-shrink:0; }
+  .sym-label { font-family:'JetBrains Mono',monospace; font-size:9px; color:var(--text-muted); white-space:nowrap; letter-spacing:1.5px; text-transform:uppercase; }
+  .sym-btn {
+    background:transparent; border:1px solid var(--border); color:var(--text-secondary);
+    padding:3px 9px; border-radius:var(--radius-sm); cursor:pointer;
+    font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:600;
+    transition:all var(--transition); user-select:none;
+  }
+  .sym-btn:hover { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); }
+
+  /* Preview */
+  .builder-preview { width:340px; display:flex; flex-direction:column; flex-shrink:0; background:var(--bg-input); }
+  .builder-preview-header { padding:10px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px; }
+  .builder-preview-header h3 {
+    font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:500;
+    color:var(--text-muted); text-transform:uppercase; letter-spacing:2.5px; flex:1;
+  }
+  .preview-actions { padding:10px 14px; display:flex; gap:6px; flex-wrap:wrap; border-top:1px solid var(--border); }
+
+  /* チップツールチップ */
+  .chip-tooltip {
+    position:fixed; z-index:2500; background:var(--bg-tertiary); border:1px solid var(--border-light);
+    border-radius:var(--radius); padding:8px 12px; font-size:11px; max-width:280px;
+    pointer-events:none; box-shadow:0 6px 24px var(--shadow); line-height:1.5;
+    font-family:'JetBrains Mono',monospace; word-break:break-all;
+  }
+
+  /* 分割メニュー */
+  .split-menu { background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius); box-shadow:0 6px 24px var(--shadow); padding:5px; min-width:160px; backdrop-filter:blur(6px); }
+  .split-menu-item { padding:7px 12px; font-size:11px; cursor:pointer; border-radius:var(--radius-sm); font-family:'JetBrains Mono',monospace; color:var(--text-primary); }
+  .split-menu-item:hover { background:var(--bg-tertiary); }
+
+  /* ===== Theme picker (card style) ===== */
+  .theme-picker-wrap { position:relative; }
+  .theme-picker {
+    position:absolute; top:calc(100% + 10px); right:0;
+    background:var(--bg-secondary); border:1px solid var(--border-light);
+    border-radius:var(--radius-lg); box-shadow:0 12px 32px var(--shadow);
+    padding:10px; z-index:2500; width:340px; backdrop-filter:blur(8px);
+    display:none; grid-template-columns:repeat(2,1fr); gap:8px;
+  }
+  .theme-picker[style*="display: block"], .theme-picker[style*="display:block"] { display:grid !important; }
+  .theme-picker::before {
+    content:"THEME · 紙の気分"; grid-column:1/-1;
+    font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:2.5px;
+    color:var(--text-muted); padding:2px 4px 6px;
+    border-bottom:1px solid var(--border); margin-bottom:4px;
+  }
+  .theme-opt {
+    --t-bg:var(--bg-secondary); --t-ac:var(--accent); --t-ink:var(--text-primary);
+    display:flex; flex-direction:column; gap:6px; padding:10px 12px;
+    background:var(--t-bg); border:1px solid var(--border); border-radius:var(--radius);
+    cursor:pointer; font-family:inherit; transition:all var(--transition);
+    text-align:left; color:var(--t-ink); position:relative; overflow:hidden;
+  }
+  .theme-opt::before {
+    content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+    background:var(--t-ac); transform:scaleY(0); transform-origin:center; transition:transform var(--transition);
+  }
+  .theme-opt:hover { border-color:var(--border-light); transform:translateY(-1px); }
+  .theme-opt:hover::before { transform:scaleY(0.7); }
+  .theme-opt.active { border-color:var(--t-ac); }
+  .theme-opt.active::before { transform:scaleY(1); }
+  .theme-opt .t-name {
+    font-family:'Fraunces',serif; font-style:italic; font-weight:500;
+    font-size:15px; color:var(--t-ink);
+  }
+  .theme-opt .t-meta {
+    font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:1.5px;
+    color:var(--t-ac); text-transform:uppercase;
+  }
+  .theme-opt .t-swatches { display:flex; gap:3px; margin-top:2px; }
+  .theme-opt .t-swatches span { width:14px; height:14px; border-radius:2px; border:1px solid rgba(0,0,0,0.15); }
+  .theme-opt[data-theme="graphite"] { --t-bg:#1e1e24; --t-ac:#e8b04a; --t-ink:#ede8dc; }
+  .theme-opt[data-theme="noir"]     { --t-bg:#111115; --t-ac:#5eead4; --t-ink:#e6ebe6; }
+  .theme-opt[data-theme="paper"]    { --t-bg:#fbf7ee; --t-ac:#c83a2a; --t-ink:#1a1814; }
+  .theme-opt[data-theme="sakura"]   { --t-bg:#fffafa; --t-ac:#c9457a; --t-ink:#2a1f24; }
+  .theme-opt[data-theme="pine"]     { --t-bg:#15231f; --t-ac:#a8c89c; --t-ink:#e6ebe2; }
+  .theme-opt[data-theme="atlas"]    { --t-bg:#142236; --t-ac:#d4a857; --t-ink:#e8edf4; }
+  .theme-opt[data-theme="terminal"] { --t-bg:#0a140a; --t-ac:#4afa6e; --t-ink:#b8ffb8; }
+  .theme-opt[data-theme="cyber"]    { --t-bg:#140a24; --t-ac:#ff3ec8; --t-ink:#ecdfff; }
+  .theme-opt[data-theme="mocha"]    { --t-bg:#261c16; --t-ac:#d99458; --t-ink:#f0e4d4; }
+  .theme-opt[data-theme="arctic"]   { --t-bg:#f7fafc; --t-ac:#2466a0; --t-ink:#102030; }
+
+  /* ===== Preset panel ===== */
+  .preset-wrap { position:relative; }
+  .preset-panel {
+    position:absolute; bottom:calc(100% + 6px); right:0;
+    background:var(--bg-secondary); border:1px solid var(--border-light);
+    border-radius:var(--radius); box-shadow:0 8px 24px var(--shadow);
+    padding:5px; min-width:180px; max-height:220px; overflow-y:auto; z-index:2000;
+    backdrop-filter:blur(6px);
+  }
+  .preset-item { display:flex; align-items:center; gap:6px; padding:7px 10px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; transition:background var(--transition); }
+  .preset-item:hover { background:var(--bg-tertiary); }
+  .preset-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .preset-del { padding:2px 4px; font-size:11px; }
+
+  /* 変数名バリデーション */
+  .var-name-warning { font-size:11px; color:var(--warning); margin-top:4px; font-style:italic; }
+
+  /* $ prefix */
+  .dollar-input { display:flex; align-items:stretch; }
+  .dollar-prefix {
+    background:var(--bg-tertiary); border:1px solid var(--border); border-right:none;
+    border-radius:var(--radius-sm) 0 0 var(--radius-sm); padding:7px 10px;
+    font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600;
+    color:var(--accent); display:flex; align-items:center;
+  }
+  .dollar-input input { border-radius:0 var(--radius-sm) var(--radius-sm) 0 !important; }
+
+  /* ===== Buttons ===== */
+  .btn {
+    background:transparent; border:1px solid var(--border); color:var(--text-primary);
+    padding:6px 14px; border-radius:999px; cursor:pointer;
+    font-size:11.5px; font-family:inherit; font-weight:500;
+    transition:all var(--transition); white-space:nowrap; letter-spacing:0.2px;
+  }
+  .btn:hover { border-color:var(--text-secondary); background:var(--bg-tertiary); }
+  .btn-primary {
+    background:var(--accent); border-color:var(--accent); color:var(--bg-primary);
+    font-weight:600;
+  }
+  .btn-primary:hover { background:var(--accent-hover); border-color:var(--accent-hover); box-shadow:0 0 0 4px var(--accent-dim); }
+  .btn-sm { padding:3px 10px; font-size:10.5px; }
+  .btn-icon {
+    padding:5px 7px; font-size:13px; line-height:1; border:1px solid transparent;
+    background:transparent; color:var(--text-secondary); cursor:pointer;
+    border-radius:var(--radius-sm); transition:all var(--transition);
+  }
+  .btn-icon:hover { background:var(--bg-tertiary); color:var(--text-primary); }
+  .btn-add-builder {
+    padding:3px 9px; font-size:10px; background:transparent;
+    border:1px solid var(--accent); color:var(--accent); border-radius:999px;
+    cursor:pointer; font-family:inherit; font-weight:500; transition:all var(--transition);
+  }
+  .btn-add-builder:hover { background:var(--accent); color:var(--bg-primary); }
+
+  /* ===== Modal ===== */
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(0,0,0,0.55); backdrop-filter:blur(6px);
+    display:flex; align-items:center; justify-content:center; z-index:1000;
+    opacity:0; pointer-events:none; transition:opacity var(--transition);
+  }
+  .modal-overlay.active { opacity:1; pointer-events:all; }
+  .modal {
+    background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius-lg);
+    padding:28px 26px; min-width:440px; max-width:580px;
+    box-shadow:0 24px 60px var(--shadow);
+    transform:translateY(12px) scale(0.98); transition:all var(--transition); position:relative;
+  }
+  .modal::before {
+    content:""; position:absolute; left:14px; right:14px; top:0; height:1px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent); opacity:0.5;
+  }
+  .modal-overlay.active .modal { transform:translateY(0) scale(1); }
+  .modal h3 { font-family:'Fraunces',serif; font-style:italic; font-weight:500; font-size:20px; margin-bottom:18px; letter-spacing:0.3px; }
+  .form-group { margin-bottom:14px; }
+  .form-group label {
+    display:block; font-family:'JetBrains Mono',monospace; font-size:9px; font-weight:500;
+    color:var(--text-muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:2px;
+  }
+  .form-group input, .form-group textarea, .form-group select {
+    width:100%; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm);
+    color:var(--text-primary); padding:9px 11px; font-size:13px; font-family:inherit;
+    outline:none; transition:all var(--transition);
+  }
+  .form-group textarea { font-family:'JetBrains Mono',monospace; font-size:12px; resize:vertical; min-height:60px; line-height:1.5; }
+  .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+    border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-dim);
+  }
+  .form-group .hint { font-size:11px; color:var(--text-muted); margin-top:4px; font-style:italic; }
+  .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+
+  /* ===== Context Menu ===== */
+  .context-menu {
+    position:fixed; background:var(--bg-secondary); border:1px solid var(--border-light);
+    border-radius:var(--radius); box-shadow:0 8px 24px var(--shadow); min-width:180px;
+    z-index:2000; display:none; padding:5px; backdrop-filter:blur(6px);
+  }
+  .context-menu.active { display:block; }
+  .context-menu-item { padding:7px 13px; font-size:12.5px; cursor:pointer; border-radius:var(--radius-sm); transition:background var(--transition); }
+  .context-menu-item:hover { background:var(--bg-tertiary); }
+  .context-menu-item.danger { color:var(--negative); }
+  .context-menu-item.danger:hover { background:var(--negative-dim); }
+  .context-menu-sep { height:1px; background:var(--border); margin:5px 8px; }
+
+  /* ===== Misc ===== */
+  .empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-muted); gap:14px; }
+  .empty-state .icon { font-size:48px; opacity:0.25; }
+  .empty-state p { font-family:'Fraunces',serif; font-style:italic; font-size:15px; letter-spacing:0.3px; }
+
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border-light); border-radius:99px; border:2px solid transparent; background-clip:padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--text-muted); background-clip:padding-box; border:2px solid transparent; }
+
+  .toast-container { position:fixed; bottom:22px; right:22px; z-index:3000; display:flex; flex-direction:column; gap:8px; }
+  .toast {
+    background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:var(--radius);
+    padding:10px 16px; font-size:12.5px; box-shadow:0 6px 24px var(--shadow);
+    animation:toastIn 0.28s cubic-bezier(0.2,0,0,1), toastOut 0.3s ease 2.7s forwards;
+    border-left:2px solid var(--accent); font-family:'IBM Plex Sans JP',sans-serif;
+  }
+  @keyframes toastIn { from { opacity:0; transform:translateY(12px) translateX(8px); } }
+  @keyframes toastOut { to { opacity:0; transform:translateY(-6px); } }
+
+  /* Initial reveal */
+  .header { animation:fadeDown 0.5s cubic-bezier(0.2,0,0,1) both; }
+  .sidebar { animation:fadeRight 0.55s cubic-bezier(0.2,0,0,1) 0.05s both; }
+  .main { animation:fadeIn 0.6s cubic-bezier(0.2,0,0,1) 0.1s both; }
+  .builder-panel { animation:fadeUp 0.55s cubic-bezier(0.2,0,0,1) 0.15s both; }
+  @keyframes fadeDown { from { opacity:0; transform:translateY(-8px); } }
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(8px); } }
+  @keyframes fadeRight{ from { opacity:0; transform:translateX(-8px); } }
+  @keyframes fadeIn   { from { opacity:0; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>SD Variable Manager</h1>
+
+    <div class="header-actions">
+      <span class="sync-badge sync-init" id="syncBadge" title="Forge との同期状態">⚪ 未同期</span>
+      <button class="btn-icon" id="btnUndo" title="元に戻す (Ctrl+Z)" style="opacity:0.3;">↩</button>
+      <button class="btn-icon" id="btnRedo" title="やり直す (Ctrl+Y)" style="opacity:0.3;">↪</button>
+      <div class="theme-picker-wrap">
+        <button class="btn" id="btnTheme">Theme</button>
+        <div class="theme-picker" id="themePicker" style="display:none;">
+          <button class="theme-opt" data-theme="graphite"><span class="t-meta">Default · 黒鉛</span><span class="t-name">Graphite</span><span class="t-swatches"><span style="background:#17171c"></span><span style="background:#e8b04a"></span><span style="background:#ede8dc"></span></span></button>
+          <button class="theme-opt" data-theme="noir"><span class="t-meta">Dark · 深夜</span><span class="t-name">Noir</span><span class="t-swatches"><span style="background:#0a0a0d"></span><span style="background:#5eead4"></span><span style="background:#e6ebe6"></span></span></button>
+          <button class="theme-opt" data-theme="paper"><span class="t-meta">Light · 紙</span><span class="t-name">Paper</span><span class="t-swatches"><span style="background:#f4efe4"></span><span style="background:#c83a2a"></span><span style="background:#1a1814"></span></span></button>
+          <button class="theme-opt" data-theme="sakura"><span class="t-meta">Light · 桜</span><span class="t-name">Sakura</span><span class="t-swatches"><span style="background:#faf3f3"></span><span style="background:#c9457a"></span><span style="background:#2a1f24"></span></span></button>
+          <button class="theme-opt" data-theme="pine"><span class="t-meta">Dark · 苔</span><span class="t-name">Pine</span><span class="t-swatches"><span style="background:#0f1a17"></span><span style="background:#a8c89c"></span><span style="background:#e6ebe2"></span></span></button>
+          <button class="theme-opt" data-theme="atlas"><span class="t-meta">Dark · 真鍮</span><span class="t-name">Atlas</span><span class="t-swatches"><span style="background:#0d1828"></span><span style="background:#d4a857"></span><span style="background:#e8edf4"></span></span></button>
+          <button class="theme-opt" data-theme="terminal"><span class="t-meta">Dark · 蛍光</span><span class="t-name">Terminal</span><span class="t-swatches"><span style="background:#050a05"></span><span style="background:#4afa6e"></span><span style="background:#b8ffb8"></span></span></button>
+          <button class="theme-opt" data-theme="cyber"><span class="t-meta">Dark · 電脳</span><span class="t-name">Cyber</span><span class="t-swatches"><span style="background:#0a0612"></span><span style="background:#ff3ec8"></span><span style="background:#38e8ff"></span></span></button>
+          <button class="theme-opt" data-theme="mocha"><span class="t-meta">Dark · 焙煎</span><span class="t-name">Mocha</span><span class="t-swatches"><span style="background:#1c1410"></span><span style="background:#d99458"></span><span style="background:#f0e4d4"></span></span></button>
+          <button class="theme-opt" data-theme="arctic"><span class="t-meta">Light · 氷雪</span><span class="t-name">Arctic</span><span class="t-swatches"><span style="background:#eef4f8"></span><span style="background:#2466a0"></span><span style="background:#102030"></span></span></button>
+        </div>
+      </div>
+      <button class="btn" id="btnForgeUrl">⚙️ Forge URL</button>
+      <button class="btn" id="btnExport">📤 Export</button>
+      <button class="btn" id="btnImportTrigger">📥 Import</button>
+      <input type="file" id="importFile" accept=".json" style="display:none">
+      <button class="btn" id="btnMergeImportTrigger" title="既存変数を保持したまま追加">📥+ Merge</button>
+      <input type="file" id="mergeImportFile" accept=".json" style="display:none">
+    </div>
+  </div>
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h2>カテゴリ</h2>
+      <div class="sidebar-actions">
+        <button class="btn-icon" id="btnExpandAll" title="すべて展開">▼</button>
+        <button class="btn-icon" id="btnCollapseAll" title="すべて折りたたみ">▶</button>
+        <button class="btn-icon" id="btnAddRootCat" title="カテゴリ追加">➕</button>
+      </div>
+    </div>
+    <div class="tree-container" id="treeContainer"></div>
+  </div>
+  <div class="main">
+    <div class="main-toolbar">
+      <div class="path" id="breadcrumb">すべての変数</div>
+      <div class="search-box"><input type="text" id="searchInput" placeholder="検索..."></div>
+      <button class="btn btn-primary" id="btnAddVar">＋ 変数追加</button>
+    </div>
+    <div class="variable-list" id="variableList"></div>
+  </div>
+  <div class="builder-panel" id="builderPanel">
+    <div class="builder-resize-handle" id="builderResizeHandle" title="ドラッグしてサイズ変更"></div>
+    <div class="builder-header" id="builderHeader">
+      <h2>🔧 実装ビルダー</h2>
+      <div class="builder-header-right">
+        <span class="toggle-icon">▼</span>
+      </div>
+    </div>
+    <div class="builder-body">
+      <div class="builder-columns" id="builderColumns">
+        <!-- 行タブ -->
+        <div class="builder-rows-toolbar">
+          <div class="row-tabs" id="rowTabs"></div>
+          <button class="btn btn-sm" id="btnAddRow" title="行を追加">＋ 行</button>
+          <button class="btn btn-sm" id="btnSavePreset" title="現在の構成を保存">💾</button>
+          <div class="preset-wrap">
+            <button class="btn btn-sm" id="btnLoadPreset" title="プリセット読み込み">📂</button>
+            <div class="preset-panel" id="presetPanel" style="display:none;"></div>
+          </div>
+        </div>
+        <!-- 列タブ -->
+        <div class="builder-columns-toolbar">
+          <div class="col-tabs" id="colTabs"></div>
+          <button class="btn btn-sm" id="btnAddCol" title="// 列を追加">＋ //</button>
+        </div>
+        <div class="builder-columns-content" id="colContent"></div>
+      </div>
+      <div class="builder-preview">
+        <div class="builder-preview-header">
+          <h3>出力テキスト</h3>
+          <button class="btn btn-sm" id="btnResetText" title="ビルダーから再生成">🔄 再生成</button>
+          <button class="btn btn-sm" id="btnBuilderClear">クリア</button>
+        </div>
+        <div class="symbol-palette" id="symbolPalette">
+          <span class="sym-label">挿入：</span>
+          <button class="sym-btn" data-sym="sep" title="列区切り">//</button>
+          <button class="sym-btn" data-sym="semi" title="値区切り">;</button>
+          <button class="sym-btn" data-sym="open" title="シャッフル開始">{ </button>
+          <button class="sym-btn" data-sym="close" title="シャッフル終了"> }</button>
+          <button class="sym-btn" data-sym="neg" title="ネガティブ区切り">!!</button>
+          <button class="sym-btn" data-sym="div" title="変数定義区切り">---</button>
+        </div>
+        <div style="flex:1;padding:8px 12px;overflow:hidden;display:flex;flex-direction:column;">
+          <textarea id="outputText" style="flex:1;width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 8px;resize:none;outline:none;line-height:1.5;" placeholder="ビルダーで変数を追加するか、ここに直接書けます"></textarea>
+          <div id="outputHint" style="font-size:10px;color:var(--text-muted);margin-top:4px;">ビルダーと同期中</div>
+        </div>
+        <div class="preview-actions">
+          <button class="btn btn-sm" id="btnCopyDefs">📋 変数定義</button>
+          <button class="btn btn-sm" id="btnCopyImpl">📋 実装行</button>
+          <button class="btn btn-sm" id="btnCopyAll">📋 全体コピー</button>
+          <button class="btn btn-sm btn-primary" id="btnSendForge" title="Forgeに送信">🚀 Forgeに送信</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="context-menu" id="contextMenu">
+  <div class="context-menu-item" id="ctxAddChild">📁 サブカテゴリ追加</div>
+  <div class="context-menu-item" id="ctxAddVar">📝 変数追加</div>
+  <div class="context-menu-sep"></div>
+  <div class="context-menu-item" id="ctxRename">✏️ リネーム</div>
+  <div class="context-menu-item danger" id="ctxDelete">🗑 削除</div>
+</div>
+<div class="modal-overlay" id="modalOverlay"><div class="modal" id="modalContent"></div></div>
+<div class="toast-container" id="toastContainer"></div>
+<div class="chip-tooltip" id="chipTooltip" style="display:none;"></div>
+
+<script src="./sd_variable_manager_modules/utils.js"></script>
+<script src="./sd_variable_manager_modules/themes.js"></script>
+<script src="./sd_variable_manager_modules/state.js"></script>
+<script src="./sd_variable_manager_modules/builder.js"></script>
+<script src="./sd_variable_manager_modules/globals.js"></script>
+<script src="./sd_variable_manager_modules/render.js"></script>
+<script src="./sd_variable_manager_modules/ui-ops.js"></script>
+<script src="./sd_variable_manager_modules/forge.js"></script>
+<script src="./sd_variable_manager_modules/dnd.js"></script>
+<script src="./sd_variable_manager_modules/events.js"></script>
+<script src="./sd_variable_manager_modules/main.js"></script>
+</body>
+</html>

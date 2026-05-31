@@ -2,15 +2,17 @@
 
 ## 概要
 
-[stable-diffusion-webui-forge](https://github.com/lllyasviel/stable-diffusion-webui-forge) の `scripts/` 配下に配置して使う、画像生成ワークフロー支援の自作拡張 3 種。元々は `vram_safe_batch_v3b.py` (1075 行モノリス) に詰め込んでいた機能を、Phase 8 リファクタで責務単位に 3 つの独立拡張へ分割した。Claude Code を使った AI 駆動開発で実装し、`tdd-forge` + `superpowers` Skill で TDD と多段検証 (L1/L2/L3) を必ず通すワークフロー。forge 本体は upstream のままで、本リポジトリのファイルだけを上書き配置すれば動く。
+[stable-diffusion-webui-forge](https://github.com/lllyasviel/stable-diffusion-webui-forge) に被せて使う画像生成ワークフロー支援ツール群。`$変数` を使ったプロンプトのバッチ生成・履歴/中断再開、通常生成での変数展開、画像ごとの VRAM 解放、変数編集スタンドアロン UI、プロンプト textarea 上の Ctrl+F 検索置換、を提供する。元々は `vram_safe_batch_v3b.py` (1075 行モノリス) に詰め込んでいた機能を、Phase 8 リファクタで責務単位の独立拡張に分割した。Claude Code を使った AI 駆動開発で実装し、`tdd-forge` + `superpowers` Skill で TDD と多段検証 (L1/L2/L3) を必ず通すワークフロー。forge 本体は upstream のままで、本リポジトリのファイルだけを上書き配置すれば動く。
 
-## 成果物 (3 拡張)
+## 成果物 (3 拡張 + 1 関連 UI + 1 JS ウィジェット)
 
-| 拡張 | 種別 | 主な役割 |
+| 成果物 | 種別 | 主な役割 |
 |---|---|---|
 | **[Batch Resume](#1-batch-resume)** | Script | `$変数` 直書きプロンプトのバッチ展開 + 履歴 + 中断再開 |
 | **[Prompt Expander](#2-prompt-expander)** | AlwaysOn | 通常生成でも `$変数` を展開 + variables 同期 API + SSE |
 | **[VRAM Recycler](#3-vram-recycler)** | AlwaysOn | 画像ごとに VRAM を解放 (CUDA `empty_cache` + `gc.collect`) |
+| **[SD Variable Manager](#4-sd-variable-manager)** | スタンドアロン HTML | ブラウザ単体で開く変数編集 UI。Prompt Expander の REST/SSE と双方向同期 |
+| **[Text Replace (Ctrl+F)](#5-text-replace-ctrlf)** | JS ウィジェット | プロンプト textarea 上で VSCode 風 Ctrl+F 検索/置換パネルを開く |
 
 ---
 
@@ -89,6 +91,80 @@ UI トグル ON で、各画像生成後に `torch.cuda.empty_cache()` + `gc.col
 #### 設計ドキュメント
 
 - 責務分離の全体図: [`docs/phase8/refactoring_plan.html`](docs/phase8/refactoring_plan.html) (「画像ごと VRAM 解放」セクション)
+
+---
+
+### 4. SD Variable Manager
+
+📁 [`scripts/sd_variable_manager.html`](scripts/sd_variable_manager.html) + [`scripts/sd_variable_manager_modules/`](scripts/sd_variable_manager_modules/) + [`scripts/sd_variable_presets.json`](scripts/sd_variable_presets.json)
+
+#### 機能
+
+forge とは別プロセスとして **ブラウザで HTML を直接開く** 変数編集スタンドアロン UI。Prompt Expander が `/vram_safe_batch/api/variables` で公開している REST + SSE と双方向同期する。
+
+- カテゴリ階層 (再帰) + 変数 (positive/negative) を GUI で編集
+- ドラッグ&ドロップで並び替え・階層移動
+- テーマ切替 (`Graphite` / 他複数) + プリセット Merge Import ([`sd_variable_presets.json`](scripts/sd_variable_presets.json) から定番タグ集を流し込み可能)
+- 起動時に Forge と疎通確認し、Manager 側が空なら Forge 側の `variables.json` を黙って取り込み
+- 編集すると SSE で Forge 側 (= prompt_expander) へ即時同期 → forge 再起動なしで `$変数` が即反映
+
+#### 作成意図
+
+- `vars/variables.json` を手で編集していたが、200 件超になると **JSON 直編集は破綻** した (id 衝突、構造ミス)
+- forge のメイン UI に組み込む形では「変数編集中は生成画面が遮られる」「ツリー編集のような複雑 UI には forge の Gradio が向かない」課題があった
+- **forge とは独立した HTML** にすることで、別ディスプレイ/別タブで編集しながら本体は生成を回せる構成にした
+- バックエンド (`prompt_expander.py` の REST + SSE) を分離したことで、将来 VSCode 拡張など別フロントからも差し替え可能
+
+#### 使い方
+
+```bash
+# ブラウザでファイルを直接開く (file:// 経由でも CORS は prompt_expander 側で allow_origins=* 済み)
+start scripts/sd_variable_manager.html      # Windows
+xdg-open scripts/sd_variable_manager.html   # Linux
+open scripts/sd_variable_manager.html       # macOS
+```
+
+forge が起動していれば右上の Sync バッジが緑になり、編集が即同期される。
+
+#### 設計ドキュメント
+
+- 双方向同期 (Phase B) の経緯: [`docs/archive/variable_manager_sync_design.html`](docs/archive/variable_manager_sync_design.html)
+- 関連: [`vars/variables.example.json`](vars/variables.example.json) — variables.json の v2 スキーマサンプル (実体は個人データを含むため git 管理外)
+
+---
+
+### 5. Text Replace (Ctrl+F)
+
+📁 [`javascript/text_replace.js`](javascript/text_replace.js)
+
+#### 機能
+
+プロンプト textarea にフォーカス中の **Ctrl+F** で、VSCode 風のフローティング検索置換パネルを開く純 JS ウィジェット。
+
+- 検索・前後移動 (Enter / Shift+Enter)
+- 1 件置換 / 全置換
+- マッチは `setSelectionRange` でネイティブ選択ハイライト
+- 検索対象 textarea セレクタ: `*:is([id*='_toprow'] [id*='_prompt'], .prompt) textarea` (forge の `edit-attention.js` と同じ流儀)
+- 検索/置換ロジックは [`scripts/vram_safe_batch_modules/text_tools.py`](scripts/vram_safe_batch_modules/text_tools.py) の意味論を JS で **ミラー実装** (Python 側で挙動を `tests/` カバーし、JS 側はそれを移植)
+
+#### 作成意図
+
+- `$変数` を多用するワークフローでは、メインプロンプトが数百〜数千字になり **ブラウザ標準の検索が効かない** (textarea 内テキストは Ctrl+F で検索できない)
+- 「特定タグの一括置換」をしたいときに gen タブ全体をマウス選択 → 別エディタに貼り → 戻す、という手間が常にあった
+- forge は `javascript/*.js` を起動時に自動 `<script>` 読込してくれる仕様を利用し、**Python 拡張を増やさず純 JS だけで完結** させた (Python 側に依存を持たないため壊れにくい)
+- Python 側 `text_tools.py` を意味論の "正本" として置き、JS 実装は単なる移植にした → ロジック検証は L1 unit テストで担保、JS 側は薄く保つ
+
+#### 使い方
+
+1. forge を起動して通常通り gen タブ (`txt2img` / `img2img`) を開く
+2. メインプロンプト textarea をクリックしてフォーカス
+3. **Ctrl+F** で検索パネルが右上に出現
+4. 検索語 → Enter で次のマッチへ、置換語入力 → 全置換ボタン
+5. Esc でパネルを閉じる
+
+#### 設計ドキュメント
+
+- 設計計画書: [`docs/phase8/f_text_replace_plan.html`](docs/phase8/f_text_replace_plan.html)
 
 ---
 
@@ -174,11 +250,19 @@ UI トグル ON で、各画像生成後に `torch.cuda.empty_cache()` + `gc.col
 │   ├── guides/                             ユーザー向け使い方ガイド
 │   ├── images/                             ガイドから参照されるスクショ
 │   └── user_memo/                          ユーザー手書きの修正案メモ
-└── scripts/                                forge の scripts/ にそのまま置く
-    ├── batch_resume.py                     Script 拡張: バッチ展開 + 履歴 + 再開
-    ├── prompt_expander.py                  AlwaysOn 拡張: 通常生成でも $変数 展開 + API
-    ├── vram_recycler.py                    AlwaysOn 拡張: 画像ごと VRAM 解放
-    └── vram_safe_batch_modules/            3 拡張で共有する内部実装
+├── scripts/                                forge の scripts/ にそのまま置く
+│   ├── batch_resume.py                     Script 拡張: バッチ展開 + 履歴 + 再開
+│   ├── prompt_expander.py                  AlwaysOn 拡張: 通常生成でも $変数 展開 + API
+│   ├── vram_recycler.py                    AlwaysOn 拡張: 画像ごと VRAM 解放
+│   ├── sd_variable_manager.html            スタンドアロン変数編集 UI 本体
+│   ├── sd_variable_manager_modules/        変数 UI の JS モジュール群
+│   ├── sd_variable_presets.json            Merge Import 用の定番タグプリセット
+│   └── vram_safe_batch_modules/            複数拡張で共有する内部実装
+├── javascript/                             forge が起動時に自動 <script> 読込
+│   └── text_replace.js                     Ctrl+F 検索置換ウィジェット
+└── vars/
+    └── variables.example.json              variables.json v2 スキーマのサンプル
+                                            (実体 vars/variables.json は git 管理外)
 ```
 
 ---
@@ -194,19 +278,30 @@ UI トグル ON で、各画像生成後に `torch.cuda.empty_cache()` + `gc.col
 ### インストール
 
 ```bash
-# forge の scripts/ にコピー
-cp -r scripts/* /path/to/stable-diffusion-webui-forge/scripts/
+FORGE=/path/to/stable-diffusion-webui-forge
 
-# (任意) tdd-forge skill を forge プロジェクトにも反映する場合
-cp -r .claude/skills/tdd-forge /path/to/stable-diffusion-webui-forge/.claude/skills/
+# 1. scripts/ をコピー (Script + AlwaysOn 拡張 + SD Variable Manager UI + 共有 modules)
+cp -r scripts/* $FORGE/scripts/
+
+# 2. javascript/ をコピー (Ctrl+F 検索置換)
+cp -r javascript/* $FORGE/javascript/
+
+# 3. vars/variables.json を作成 (空ファイルでも OK。サンプルを参考に)
+mkdir -p $FORGE/vars
+cp vars/variables.example.json $FORGE/vars/variables.json   # サンプルから始める場合
+
+# 4. (任意) tdd-forge skill を forge プロジェクトにも反映する場合
+cp -r .claude/skills/tdd-forge $FORGE/.claude/skills/
 ```
 
 forge を再起動すると:
 
 - Script ドロップダウン → 「Batch Resume」
 - Always-On アコーディオン → 「Prompt Expander」「🧹 VRAM Recycler」
+- プロンプト textarea にフォーカスして **Ctrl+F** → 検索置換パネル
+- ブラウザで `scripts/sd_variable_manager.html` を開く → 変数編集 UI
 
-の 3 つが現れる。
+の 5 つが利用可能になる。
 
 ## 注意点
 

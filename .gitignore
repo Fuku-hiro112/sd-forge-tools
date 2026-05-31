@@ -17,3 +17,7 @@ Thumbs.db
 *.log
 tmp/
 build/
+
+# vars (実体は個人データを含むためサンプルのみ共有)
+vars/variables.json
+vars/*.bak.*
