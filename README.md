@@ -2,7 +2,9 @@
 
 ## 概要
 
-[stable-diffusion-webui-forge](https://github.com/lllyasviel/stable-diffusion-webui-forge) に被せて使う画像生成ワークフロー支援ツール群。`$変数` を使ったプロンプトのバッチ生成・履歴/中断再開、通常生成での変数展開、画像ごとの VRAM 解放、変数編集スタンドアロン UI、プロンプト textarea 上の Ctrl+F 検索置換、を提供する。元々は `vram_safe_batch_v3b.py` (1075 行モノリス) に詰め込んでいた機能を、Phase 8 リファクタで責務単位の独立拡張に分割した。Claude Code を使った AI 駆動開発で実装し、`tdd-forge` + `superpowers` Skill で TDD と多段検証 (L1/L2/L3) を必ず通すワークフロー。forge 本体は upstream のままで、本リポジトリのファイルだけを上書き配置すれば動く。
+AI イラスト生成 (Stable Diffusion / forge) のワークフローを効率化する拡張ツール群。元々 1075 行のモノリス拡張 (vram_safe_batch_v3b.py) に全機能を詰め込んでいたものを、Claude Code を使った AI 駆動開発で責務単位の独立拡張に分割し、保守性を高めたのが最大の狙いです。TDD と多段検証 (L1/L2/L3) を必ず通すワークフローで実装しました。機能としては $変数 を使ったプロンプトのバッチ生成・履歴/中断再開、通常生成での変数展開、画像ごとの VRAM 解放、変数編集スタンドアロン UI、プロンプト上での Ctrl+F 検索置換などを提供します。
+
+[stable-diffusion-webui-forge](https://github.com/lllyasviel/stable-diffusion-webui-forge) に被せて使う構成で、`$変数` を使ったプロンプトのバッチ生成・履歴/中断再開、通常生成での変数展開、画像ごとの VRAM 解放、変数編集スタンドアロン UI、プロンプト textarea 上の Ctrl+F 検索置換、を提供する。元々は `vram_safe_batch_v3b.py` (1075 行モノリス) に詰め込んでいた機能を、Phase 8 リファクタで責務単位の独立拡張に分割した。Claude Code を使った AI 駆動開発で実装し、`tdd-forge` + `superpowers` Skill で TDD と多段検証 (L1/L2/L3) を必ず通すワークフロー。forge 本体は upstream のままで、本リポジトリのファイルだけを上書き配置すれば動く。
 
 ## 成果物 (3 拡張 + 1 関連 UI + 1 JS ウィジェット)
 
