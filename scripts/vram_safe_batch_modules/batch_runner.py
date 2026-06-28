@@ -17,6 +17,36 @@ from .ui_helpers import _parse_dropdown_index
 MAX_IMAGES_WARNING = 100
 
 
+def apply_resume_settings(p, generation):
+    """履歴の generation 設定を p に反映する純粋手続き。
+
+    width/height/cfg_scale/steps/sampler/scheduler/seed を generation dict から
+    復元する。ADetailer / Hires.fix / sd-forge-couple などの拡張設定
+    (scripts / script_args / extra_generation_params / styles / hr_* /
+    override_settings) には一切触れない。これらは履歴に保存されず、
+    現在の UI 状態から引き継がれる前提。
+
+    Returns:
+        (seed_mode, resolved_initial_seed)
+    """
+    g = generation or {}
+    p.width = g.get("width", p.width)
+    p.height = g.get("height", p.height)
+    p.cfg_scale = g.get("cfg_scale", p.cfg_scale)
+    p.steps = g.get("steps", p.steps)
+    p.sampler_name = g.get("sampler", p.sampler_name)
+    if hasattr(p, "scheduler"):
+        p.scheduler = g.get("scheduler", p.scheduler)
+    # §2: resume 時は seed_mode / resolved_initial_seed を復元
+    seed_mode = g.get("seed_mode", "sequential")
+    resolved_initial_seed = g.get(
+        "resolved_initial_seed",
+        g.get("initial_seed", p.seed),
+    )
+    p.seed = resolved_initial_seed
+    return seed_mode, resolved_initial_seed
+
+
 def run_batch(p, history_dropdown, resume_check, *, repo_root):
     """v3b の生成ループ本体。
 
@@ -62,28 +92,19 @@ def run_batch(p, history_dropdown, resume_check, *, repo_root):
         saved_order = ep.get("expansion_order", [])
         saved_vars = ep.get("used_variables", {})
 
-        # generation 設定を p に反映
-        g = resume_entry.get("generation", {})
+        # プロンプトと generation 設定を p に反映（拡張設定には触らない）
         p.prompt = main_prompt
         p.negative_prompt = negative
-        p.width = g.get("width", p.width)
-        p.height = g.get("height", p.height)
-        p.cfg_scale = g.get("cfg_scale", p.cfg_scale)
-        p.steps = g.get("steps", p.steps)
-        p.sampler_name = g.get("sampler", p.sampler_name)
-        if hasattr(p, "scheduler"):
-            p.scheduler = g.get("scheduler", p.scheduler)
-        # §2: resume 時は seed_mode / resolved_initial_seed を復元
-        seed_mode = g.get("seed_mode", "sequential")
-        resolved_initial_seed = g.get(
-            "resolved_initial_seed",
-            g.get("initial_seed", p.seed),
-        )
-        p.seed = resolved_initial_seed
+        g = resume_entry.get("generation", {})
+        seed_mode, resolved_initial_seed = apply_resume_settings(p, g)
 
         parsed = expander.parse_main_prompt(main_prompt)
-        # resume 時は履歴に保存された used_variables を優先使用
-        merged = expander.merge_variables(parsed.inline_vars, saved_vars)
+        # resume 時は履歴の used_variables を優先しつつ、欠落したネスト先変数を
+        # 現在の variables.json で補完する（inline > saved > json）
+        json_vars = variables_store.load_variables(_variables_path)
+        merged = expander.merge_variables_for_resume(
+            parsed.inline_vars, saved_vars, json_vars
+        )
         order = saved_order
 
         vram_manager.reload_model()

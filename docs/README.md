@@ -24,6 +24,7 @@ docs/
 | [`implementation_playbook.md`](phase8/implementation_playbook.md) | Claude 実装エージェント用詳細プレイブック (機能 ID / 不変条件 / 各 Phase 手順) | Claude / 実装者 |
 | [`c_design_choices.html`](phase8/c_design_choices.html) | Phase 8-C の 3 設計案 (保守/標準/攻め) の比較 | ユーザー (選択時) |
 | [`c_ui_restructure.html`](phase8/c_ui_restructure.html) | Phase 8-C-UI 大規模 UI 移管の事前合意ドキュメント | ユーザー (承認用) |
+| [`batch_resume_bugfix_plan.html`](phase8/batch_resume_bugfix_plan.html) | Batch Resume 不具合修正プラン (①再開時のネスト変数未展開 / ②履歴ドロップダウンのスナップバック) | ユーザー / 実装者 |
 
 ### 達成された責務分離 (Phase 8 後の構成)
 - `scripts/prompt_expander.py` (AlwaysOn): `$変数` 展開 / 展開順 UI / variables 同期 API / SSE
