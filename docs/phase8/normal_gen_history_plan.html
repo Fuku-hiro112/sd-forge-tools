@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>通常生成の履歴保存・中断再開プラン</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#1a1d27; --panel2:#222634; --border:#2e3344;
+    --text:#e3e6ee; --muted:#9aa3b8; --accent:#6ea8fe; --green:#5dd39e;
+    --amber:#f6c177; --red:#f7768e; --code:#0b0d13;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Meiryo",sans-serif;
+    line-height:1.7; padding:32px 16px;
+  }
+  .wrap{max-width:980px; margin:0 auto}
+  h1{font-size:1.7rem; margin:0 0 4px; letter-spacing:.02em}
+  .sub{color:var(--muted); margin:0 0 24px; font-size:.95rem}
+  h2{font-size:1.25rem; margin:0 0 12px; display:flex; align-items:center; gap:10px}
+  h3{font-size:1rem; margin:18px 0 6px; color:var(--accent)}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:22px 24px; margin:0 0 22px; box-shadow:0 2px 12px rgba(0,0,0,.25);
+  }
+  .ctx{border-left:4px solid var(--accent)}
+  .step1{border-left:4px solid var(--green)}
+  .step2{border-left:4px solid var(--amber)}
+  .step3{border-left:4px solid #bb9af7}
+  .verify{border-left:4px solid var(--red)}
+  .badge{
+    font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:999px;
+    text-transform:uppercase; letter-spacing:.04em;
+  }
+  .b-green{background:rgba(93,211,158,.15); color:var(--green); border:1px solid rgba(93,211,158,.4)}
+  .b-amber{background:rgba(246,193,119,.15); color:var(--amber); border:1px solid rgba(246,193,119,.4)}
+  .b-blue{background:rgba(110,168,254,.15); color:var(--accent); border:1px solid rgba(110,168,254,.4)}
+  .b-purple{background:rgba(187,154,247,.15); color:#bb9af7; border:1px solid rgba(187,154,247,.4)}
+  .b-red{background:rgba(247,118,142,.15); color:var(--red); border:1px solid rgba(247,118,142,.4)}
+  code,pre{font-family:"Cascadia Code","Consolas",monospace}
+  code{background:var(--panel2); padding:1px 6px; border-radius:5px; font-size:.86em; color:#cdd6f4}
+  pre{
+    background:var(--code); border:1px solid var(--border); border-radius:10px;
+    padding:14px 16px; overflow-x:auto; font-size:.84rem; line-height:1.5; margin:8px 0;
+  }
+  pre .c{color:#6b7089}
+  pre .add{color:var(--green)}
+  pre .k{color:#bb9af7}
+  ul{margin:6px 0 6px; padding-left:22px}
+  li{margin:4px 0}
+  .muted{color:var(--muted)}
+  table{width:100%; border-collapse:collapse; margin:8px 0; font-size:.9rem}
+  th,td{border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top}
+  th{background:var(--panel2); color:var(--muted); font-weight:600}
+  .pill{display:inline-block; background:var(--panel2); border:1px solid var(--border);
+        border-radius:6px; padding:2px 8px; font-size:.8rem; margin:2px 4px 2px 0}
+  .note{background:rgba(110,168,254,.08); border:1px dashed rgba(110,168,254,.4);
+        border-radius:8px; padding:10px 14px; font-size:.88rem; color:#c3d0ee; margin:10px 0}
+  .warn{background:rgba(246,193,119,.08); border:1px dashed rgba(246,193,119,.45);
+        border-radius:8px; padding:10px 14px; font-size:.88rem; color:#f3d9a8; margin:10px 0}
+  .strike{color:var(--muted)}
+  .ok{color:var(--green); font-weight:600}
+  .flow{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0}
+  .step{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:.85rem}
+  .arrow{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>通常生成の履歴保存・中断再開プラン</h1>
+  <p class="sub">対象: 通常生成（Prompt Expander 経由・Script 未選択）でも履歴を記録し中断再開できるようにする ＋ 再開再現性の不整合修正</p>
+
+  <!-- Context -->
+  <div class="card ctx">
+    <h2>📌 背景（なぜ直すか）</h2>
+    <p>ユーザー確認の結果、<b>「通常生成でも履歴を記録し中断再開できるべき」= 仕様バグ</b>と確定。</p>
+    <table>
+      <tr><th style="width:160px">経路</th><th>いつ動くか</th><th>履歴保存</th></tr>
+      <tr>
+        <td><b>① Batch Resume</b><br><span class="muted">(Script)</span></td>
+        <td>Script ドロップダウンで「Batch Resume」を選択して Generate</td>
+        <td><span class="ok">保存される</span><br><span class="muted">batch_runner.run_batch が history_v2 を呼ぶ</span></td>
+      </tr>
+      <tr>
+        <td><b>② 通常生成</b><br><span class="muted">(Prompt Expander / AlwaysOn)</span></td>
+        <td>Script 未選択で普通に Generate（日常のメインフロー）。<code>$変数</code> があれば自動展開</td>
+        <td><span class="badge b-red">保存されない</span><br><span class="muted">prompt_expander.process は history_v2 を呼ばない</span></td>
+      </tr>
+    </table>
+    <p>②の経路では履歴が一切残らず、中断しても「途中再開」に出てこない。これを解消するのが本計画の主目的。
+       履歴記録を共通化する過程で、再開時の再現性の不整合も同時に修正する。</p>
+    <div class="note"><b>対象外:</b> 多段展開（不具合①）・履歴ドロップダウン snapback（不具合②）は
+       origin/main <code>dd4f05c</code> で修正済み。本計画では触れない。</div>
+  </div>
+
+  <!-- Step 0 -->
+  <div class="card">
+    <h2><span class="badge b-blue">Step 0</span> 前提：ブランチ取り込み</h2>
+    <p>作業ブランチ <code>claude/japanese-text-interpretation-9182qc</code> に origin/main(<code>dd4f05c</code>) を取り込む（merge）。
+       現作業ツリーは <code>dd4f05c</code> 未適用のため、これをしないと修正済みコード（<code>merge_variables_for_resume</code> 等）と衝突する。</p>
+  </div>
+
+  <!-- Step 1 -->
+  <div class="card step1">
+    <h2><span class="badge b-green">Step 1</span> 履歴エントリ生成の共通化（再現性の不整合も同時修正）</h2>
+    <p><code>history_v2.py</code> に薄いヘルパを追加し、<b>batch_runner と prompt_expander の両方が同じ記録ロジック</b>を使う（ドリフト防止）。
+       この一箇所で 3 つの既存不整合を修正する。</p>
+    <table>
+      <tr><th style="width:130px">不整合</th><th>現状</th><th>修正</th></tr>
+      <tr>
+        <td><b>B1 clip_skip</b></td>
+        <td><code>generation.clip_skip</code> を保存するのに再開時に復元しない</td>
+        <td><code>build_generation_dict</code> に含め、resume で復元</td>
+      </tr>
+      <tr>
+        <td><b>B2 negative</b></td>
+        <td>positive は <code>used_variables</code> を保存するのに、変数由来の追加ネガは再開時に<b>現在の</b> variables.json から再計算（非対称）</td>
+        <td>展開後ネガティブ <code>effective_negative</code> をスナップショット保存し、resume はこれを優先使用</td>
+      </tr>
+      <tr>
+        <td><b>H4 extensions</b></td>
+        <td><code>create_entry(extensions=...)</code> が未使用で固定値。「使用機能を保存」要件が未充足</td>
+        <td>seed_mode・hires(<code>enable_hr</code>)・VRAM Recycler 有無など検出可能な機能を記録</td>
+      </tr>
+    </table>
+    <h3>追加するヘルパ</h3>
+    <ul>
+      <li><code>build_generation_dict(p, seed_mode, resolved_initial_seed)</code> … width/height/cfg/steps/sampler/scheduler/initial_seed/resolved_initial_seed/seed_mode/<b>clip_skip</b></li>
+      <li><code>create_entry(...)</code> を拡張し <code>prompt.effective_negative</code> と <code>extensions</code> を保存（後方互換: 旧エントリは get でフォールバック）</li>
+    </ul>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="card step2">
+    <h2><span class="badge b-amber">Step 2</span> Prompt Expander に履歴記録を追加（書き込み）</h2>
+    <p><code>PromptExpander</code> に Script ライフサイクルフックで記録を実装。VRAM Recycler の <code>postprocess_image</code> と同じ流儀。</p>
+
+    <h3>二重記録ガード</h3>
+    <p><code>BatchResume.run</code> の冒頭で <code>p._batch_resume_owns_history = True</code> を立て、
+       prompt_expander はこれが真なら<b>記録しない</b>（展開は従来通り）。</p>
+    <div class="note">Batch Resume の内側生成では prompt_expander は展開済みの具体プロンプト（<code>$</code>なし）を見て早期 return するため
+       元々二重展開は起きないが、フラグで記録を明示的に抑止して安全側に倒す。</div>
+
+    <h3>フック実装</h3>
+    <table>
+      <tr><th style="width:170px">フック</th><th>処理</th></tr>
+      <tr><td><code>process()</code></td>
+          <td>展開成立(n&gt;1)かつ非ガード時、resolved_initial_seed を解決し entry 作成（status=running, completed=0, total=n、effective_negative/used_variables/extensions 込み）。<code>p._pe_history_id / _pe_total / _pe_resume_offset(=0) / _pe_counted(set)</code> を stash</td></tr>
+      <tr><td><code>postprocess_image()</code></td>
+          <td><code>idx = getattr(p,"iteration",0)</code> を使い <b>iteration 単位</b>で completed をバンプ（<code>_pe_counted</code> で重複防止）。completed = resume_offset + idx + 1</td></tr>
+      <tr><td><code>postprocess()</code></td>
+          <td>終了時に status 確定（<code>shared.state.interrupted</code>なら interrupted、completed&ge;total なら completed）</td></tr>
+    </table>
+    <div class="warn"><b>残課題 A の本質対策:</b> ADetailer/Hires が 1 プロンプトで複数 image を返しても、
+       <b>iteration 基準</b>でカウントするため過剰カウントしない（「生成されてないのにカウント」の根治）。</div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="card step3">
+    <h2><span class="badge b-purple">Step 3</span> Prompt Expander に「📂 途中再開」UI を追加（読み込み）</h2>
+    <p>Script を選ばず再開できるよう、Prompt Expander の Accordion 内に再開 UI を追加。<code>dd4f05c</code> の更新ボタン方式を踏襲。</p>
+    <ul>
+      <li>既存 <code>ui_helpers._history_choices / _entry_detail / _parse_dropdown_index</code> と <code>progress.compute_focus_update</code> を<b>再利用</b></li>
+      <li>構成: <code>history_dropdown</code> + <code>history_detail</code> + <code>resume_check</code> + 「🔄 履歴を更新」ボタン（focus 自動更新は使わない）</li>
+      <li>script_args に <code>history_dropdown, resume_check</code> を追加 → <code>process()</code> で受け取る</li>
+    </ul>
+    <h3>再開時の process()</h3>
+    <ul>
+      <li>resume_check ON かつ選択エントリが running/interrupted のとき、エントリから main_prompt/negative/order/seed_mode/resolved_initial_seed/<b>clip_skip</b> を復元（B1）</li>
+      <li><code>expander.merge_variables_for_resume(inline, saved, json)</code>（<code>dd4f05c</code> 追加済み）で展開</li>
+      <li><code>completed</code> 枚をスキップ:
+<pre>p.all_prompts = expanded[completed:]
+p.all_seeds   = [progress.compute_seed(seed_mode, resolved_initial_seed, completed+1+i)
+                 <span class="k">for</span> i <span class="k">in</span> range(total-completed)]
+p.n_iter      = total - completed
+p._pe_resume_offset = completed   <span class="c"># postprocess_image のカウント継続用</span></pre></li>
+      <li>ネガティブは保存済み <code>effective_negative</code> を優先使用（B2）</li>
+    </ul>
+    <div class="flow">
+      <span class="step">中断（completed=K まで保存）</span><span class="arrow">→</span>
+      <span class="step">履歴選択 + 再開ON</span><span class="arrow">→</span>
+      <span class="step">all_prompts = 残り(K以降)</span><span class="arrow">→</span>
+      <span class="step">標準ループで続き生成</span>
+    </div>
+    <div class="note">標準 Forge ループは「残りプロンプトだけ生成」で自然に再開できる。
+       batch_runner の <code>skip_until</code> ループは不要。</div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="card step1">
+    <h2><span class="badge b-green">Step 4</span> batch_runner のパリティ修正</h2>
+    <ul>
+      <li><code>apply_resume_settings</code> に <b>clip_skip 復元</b>を追加（B1）</li>
+      <li>resume のネガティブを保存済み <code>effective_negative</code> 優先に変更（B2）。Step 1 の共通ヘルパ経由で実装</li>
+    </ul>
+  </div>
+
+  <!-- Out of scope -->
+  <div class="card">
+    <h2>🔍 本計画と分離する残課題（任意・後続）</h2>
+    <table>
+      <tr><th style="width:150px">項目</th><th>内容</th><th>扱い</th></tr>
+      <tr><td>不具合2 同じ画像2枚</td>
+          <td><code>collect_result</code> が <code>result.images</code> を複数 extend する出力重複（ADetailer/Hires）</td>
+          <td><span class="badge b-blue">L3 確認後 別途</span></td></tr>
+      <tr><td>D1 progress.py</td>
+          <td>旧 v1 履歴レイヤ（v2 dict に黙って <code>[]</code> を返す）。pure 関数だけ残して削除</td>
+          <td><span class="badge b-blue">別コミット</span></td></tr>
+      <tr><td>D2 job_builder</td>
+          <td>未使用 <code>job_builder_a.py(208行) / job_builder_b.py(823行)</code></td>
+          <td><span class="badge b-blue">別コミット</span></td></tr>
+      <tr><td>E1 CORS</td>
+          <td>startup 後 <code>add_middleware</code> 二重登録で CORS 未適用の恐れ → Variable Manager の fetch 失敗要因</td>
+          <td><span class="badge b-blue">別コミット</span></td></tr>
+    </table>
+  </div>
+
+  <!-- Verify -->
+  <div class="card verify">
+    <h2>✅ VERIFY（tdd-forge: RED→GREEN→VERIFY）</h2>
+    <h3>L1（forge <code>tests/</code> 配下に新規）</h3>
+    <ul>
+      <li><code>build_generation_dict</code>（clip_skip 含む）の往復</li>
+      <li><code>effective_negative</code> スナップショットの保存→再開使用</li>
+      <li>iteration 基準カウントの純関数（複数 image でも 1 加算）</li>
+      <li>再開スライス（completed 枚スキップ後の prompts・seeds 列）</li>
+    </ul>
+    <h3>L2 実機</h3>
+    <ul>
+      <li>① 通常生成（Script 未選択）で <code>$変数</code> 生成 → <code>batch_history.json</code> にエントリが積まれる</li>
+      <li>② 中断 → Prompt Expander の「途中再開」で続きから生成され歯抜けが無い</li>
+      <li>③ Batch Resume Script 選択時に二重記録されない</li>
+      <li>④ 再開で clip_skip / negative / seed 列が一致</li>
+    </ul>
+    <h3>L3 実機</h3>
+    <p>ADetailer + Hires.fix + VRAM Recycler ON で連続生成 → completed が iteration 基準で実態と一致、
+       中断→再開で歯抜け無し、<code>device.type=='cuda'</code>（CUDA fallback 無し）、VRAM 推移を確認。</p>
+    <div class="note">UI/生成変更を含むため、最終 VERIFY は<b>別サブエージェントでブラインド検証</b>（tdd-forge 準拠）。
+       テストは全て <code>tests/</code> 配下に新規（<code>scripts/</code> 直下に置かない）。</div>
+
+    <h3>変更対象ファイル</h3>
+    <div>
+      <span class="pill">scripts/.../history_v2.py <span class="muted">共通ヘルパ/保存拡張</span></span>
+      <span class="pill">scripts/prompt_expander.py <span class="muted">記録+再開UI</span></span>
+      <span class="pill">scripts/batch_resume.py <span class="muted">ガードフラグ</span></span>
+      <span class="pill">scripts/.../batch_runner.py <span class="muted">B1/B2/共通化</span></span>
+      <span class="pill">scripts/.../ui_helpers.py <span class="muted">必要なら</span></span>
+    </div>
+
+    <h3>実装順序</h3>
+    <div class="flow">
+      <span class="step">Step0 ブランチ取込</span><span class="arrow">→</span>
+      <span class="step">Step1 共通ヘルパ(B1/B2/H4)</span><span class="arrow">→</span>
+      <span class="step">Step2 記録(書込)</span><span class="arrow">→</span>
+      <span class="step">Step3 再開UI(読込)</span><span class="arrow">→</span>
+      <span class="step">Step4 batch_runner パリティ</span><span class="arrow">→</span>
+      <span class="step">L1回帰 → ブラインドVERIFY</span>
+    </div>
+  </div>
+
+  <p class="sub" style="text-align:center">プラン本体(Markdown): <code>~/.claude/plans/bright-prancing-hinton.md</code></p>
+</div>
+</body>
+</html>
