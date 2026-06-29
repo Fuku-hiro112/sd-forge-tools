@@ -52,6 +52,8 @@ def build_ui(is_img2img: bool, base_dir: str) -> list:
             info="チェックONの場合、入力欄の設定は無視され選択した履歴の設定が使われます",
         )
 
+        refresh_btn = gr.Button("🔄 履歴を更新", size="sm")
+
         def on_dropdown_change(choice):
             idx = _parse_dropdown_index(choice)
             return _entry_detail(base_dir, idx) if idx >= 0 else ""
@@ -62,14 +64,16 @@ def build_ui(is_img2img: bool, base_dir: str) -> list:
             outputs=[history_detail],
         )
 
-        # ドロップダウンを開こうとした瞬間に choices を再計算
-        def on_dropdown_focus(current_value):
+        # 履歴の再計算は明示的な更新ボタンで行う。
+        # （focus イベントで自身を更新するとドロップダウンが即閉じ、選択が
+        #  最新へスナップバックして 2 件目以降を選べなくなるため）
+        def on_refresh(current_value):
             fresh = _history_choices(base_dir)
             new_choices, new_value = progress.compute_focus_update(current_value, fresh)
             return gr.update(choices=new_choices, value=new_value)
 
-        history_dropdown.focus(
-            fn=on_dropdown_focus,
+        refresh_btn.click(
+            fn=on_refresh,
             inputs=[history_dropdown],
             outputs=[history_dropdown],
         )

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Batch Resume 不具合修正プラン</title>
+<style>
+  :root{
+    --bg:#0f1117; --panel:#1a1d27; --panel2:#222634; --border:#2e3344;
+    --text:#e3e6ee; --muted:#9aa3b8; --accent:#6ea8fe; --green:#5dd39e;
+    --amber:#f6c177; --red:#f7768e; --code:#0b0d13;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Meiryo",sans-serif;
+    line-height:1.7; padding:32px 16px;
+  }
+  .wrap{max-width:980px; margin:0 auto}
+  h1{font-size:1.7rem; margin:0 0 4px; letter-spacing:.02em}
+  .sub{color:var(--muted); margin:0 0 24px; font-size:.95rem}
+  h2{font-size:1.25rem; margin:0 0 12px; display:flex; align-items:center; gap:10px}
+  h3{font-size:1rem; margin:18px 0 6px; color:var(--accent)}
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px;
+    padding:22px 24px; margin:0 0 22px; box-shadow:0 2px 12px rgba(0,0,0,.25);
+  }
+  .ctx{border-left:4px solid var(--accent)}
+  .bug1{border-left:4px solid var(--green)}
+  .bug2{border-left:4px solid var(--amber)}
+  .verify{border-left:4px solid var(--red)}
+  .badge{
+    font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:999px;
+    text-transform:uppercase; letter-spacing:.04em;
+  }
+  .b-green{background:rgba(93,211,158,.15); color:var(--green); border:1px solid rgba(93,211,158,.4)}
+  .b-amber{background:rgba(246,193,119,.15); color:var(--amber); border:1px solid rgba(246,193,119,.4)}
+  .b-blue{background:rgba(110,168,254,.15); color:var(--accent); border:1px solid rgba(110,168,254,.4)}
+  code,pre{font-family:"Cascadia Code","Consolas",monospace}
+  code{background:var(--panel2); padding:1px 6px; border-radius:5px; font-size:.86em; color:#cdd6f4}
+  pre{
+    background:var(--code); border:1px solid var(--border); border-radius:10px;
+    padding:14px 16px; overflow-x:auto; font-size:.84rem; line-height:1.5; margin:8px 0;
+  }
+  pre .c{color:#6b7089}
+  pre .add{color:var(--green)}
+  pre .k{color:#bb9af7}
+  ul{margin:6px 0 6px; padding-left:22px}
+  li{margin:4px 0}
+  .muted{color:var(--muted)}
+  table{width:100%; border-collapse:collapse; margin:8px 0; font-size:.9rem}
+  th,td{border:1px solid var(--border); padding:8px 10px; text-align:left; vertical-align:top}
+  th{background:var(--panel2); color:var(--muted); font-weight:600}
+  .pill{display:inline-block; background:var(--panel2); border:1px solid var(--border);
+        border-radius:6px; padding:2px 8px; font-size:.8rem; margin:2px 4px 2px 0}
+  .note{background:rgba(110,168,254,.08); border:1px dashed rgba(110,168,254,.4);
+        border-radius:8px; padding:10px 14px; font-size:.88rem; color:#c3d0ee; margin:10px 0}
+  .strike{color:var(--muted)}
+  .ok{color:var(--green); font-weight:600}
+  .flow{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0}
+  .step{background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:6px 12px; font-size:.85rem}
+  .arrow{color:var(--muted)}
+  .chosen{outline:2px solid var(--green); outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Batch Resume 不具合修正プラン</h1>
+  <p class="sub">対象: 中断再開機能 / 確定した2件を修正（不具合3・2-Bは調査の結果「存在しない」と判明）</p>
+
+  <!-- Context -->
+  <div class="card ctx">
+    <h2>📌 背景（なぜ直すか）</h2>
+    <table>
+      <tr><th style="width:130px">不具合</th><th>症状</th><th>状態</th></tr>
+      <tr>
+        <td><b>① ネスト変数</b></td>
+        <td><code>$変数</code> の値の中の <code>$別変数</code> が、通常生成では多段展開されるのに
+            <b>再開時だけ展開されずリテラルが残る</b>（枚数も減る）</td>
+        <td><span class="badge b-green">修正対象</span></td>
+      </tr>
+      <tr>
+        <td><b>② ドロップダウン</b></td>
+        <td>履歴を開くと一瞬複数件出るが、<b>即座に最新1件へスナップバック</b>し2件目以降を選べない</td>
+        <td><span class="badge b-amber">修正対象</span></td>
+      </tr>
+      <tr>
+        <td class="strike">③ run/ui 不整合</td>
+        <td class="strike">引数数の食い違いを疑ったが、<code>build_ui</code>は2個返し<code>run()</code>と一致</td>
+        <td><span class="badge b-blue">問題なし</span></td>
+      </tr>
+      <tr>
+        <td class="strike">②-B 文字列渡し</td>
+        <td class="strike"><code>_entry_detail</code>へ文字列を渡す疑い → 実コードは正しくint化済み</td>
+        <td><span class="badge b-blue">問題なし</span></td>
+      </tr>
+    </table>
+    <p class="muted">両不具合は独立。実装順は <b>① → ②</b>、各々別コミット。</p>
+  </div>
+
+  <!-- Bug 1 -->
+  <div class="card bug1">
+    <h2><span class="badge b-green">不具合①</span> 再開時に json_vars を補完してネスト変数を展開</h2>
+
+    <h3>根本原因（確定）</h3>
+    <ul>
+      <li><code>batch_runner.py</code> の resume 分岐(L84-86)は履歴の <code>used_variables</code> だけで
+          <code>merged</code> を作り、<code>vars/variables.json</code> 全件(<code>json_vars</code>)を読まない。</li>
+      <li>保存側(L189-195)は <code>expansion_order</code> のトップレベル変数のみ保存 →
+          <b>ネスト先変数が履歴に残らない</b>。</li>
+      <li>結果、<code>expand_prompts</code>(<code>_MAX_NESTED_DEPTH=12</code>)が辞書にキーを見つけられず展開停止。</li>
+    </ul>
+
+    <h3>修正方針 <span class="badge b-green chosen">案A 採用</span></h3>
+    <p>resume でも <code>json_vars</code> を読み、優先順位 <b>inline &gt; saved &gt; json</b> でマージ。
+       再現性のため saved を優先しつつ、欠落ネスト変数を json が補完。
+       <b>既存の欠落履歴もその場で救済</b>でき、スキーマ変更不要（後方互換）。</p>
+    <div class="note">不採用(案B): 保存時に推移閉包を収集 → 既存履歴を救済できず、実装増、
+       スキーマ形状変更で承認対象に。将来要件が出るまで保留。</div>
+
+    <h3>変更内容（resume 分岐 L84-86 を置換）</h3>
+<pre><span class="c"># inline &gt; saved &gt; json の優先順位でマージ</span>
+parsed = expander.parse_main_prompt(main_prompt)
+<span class="add">json_vars = variables_store.load_variables(_variables_path)   # 追加</span>
+merged = expander.merge_variables(
+    parsed.inline_vars,
+    <span class="add">expander.merge_variables(saved_vars, json_vars),</span>
+)
+order = saved_order</pre>
+    <p class="muted"><code>_variables_path</code>・<code>variables_store</code> import は既存。追加 import 不要。
+       <code>order</code> 拡張も不要（order 外変数も出現順で内側展開される）。</p>
+
+    <h3>テスト（L1 新規 <code>tests/test_resume_nested_variables.py</code>）</h3>
+    <ul>
+      <li>ネスト変数が json 補完で全展開（枚数も検証）</li>
+      <li>saved が json に勝つ（再現性）</li>
+      <li>inline &gt; saved &gt; json の3段優先</li>
+      <li>旧マージでリテラル残留する RED 対比</li>
+    </ul>
+
+    <h3>L2 実機確認</h3>
+    <p>ネスト変数入り <code>variables.json</code> で生成→Interrupt→履歴選択→「再開する」ON→Generate。
+       展開しきり・リテラル残らず・通常生成と同枚数。修正前の欠落履歴でも救済を1件確認。</p>
+    <div class="note"><b>意図的な挙動変更:</b> saved に無いネスト先変数は<b>現在の json 値</b>で補完
+       （従来リテラル）。saved にある変数は saved 優先で再現性維持（HIS-08 順守）。</div>
+  </div>
+
+  <!-- Bug 2 -->
+  <div class="card bug2">
+    <h2><span class="badge b-amber">不具合②</span> 履歴ドロップダウンのスナップバック</h2>
+
+    <h3>根本原因（確定）</h3>
+    <p><code>ui_builder.py</code> の <code>history_dropdown.focus(...)</code>(L71-75)が
+       <code>outputs=[history_dropdown]</code> で<b>自分自身</b>に <code>gr.update(choices, value)</code> を返す。
+       開いた瞬間に再描画されメニューが閉じ、value が最新（先頭）へ戻る。</p>
+    <div class="flow">
+      <span class="step">ドロップダウンを開く(focus)</span><span class="arrow">→</span>
+      <span class="step">自身のchoices/value更新</span><span class="arrow">→</span>
+      <span class="step">再描画でメニュー即閉じ</span><span class="arrow">→</span>
+      <span class="step">最新1件にスナップバック</span>
+    </div>
+
+    <h3>修正方針 <span class="badge b-amber chosen">更新ボタン方式 採用（ユーザー選択）</span></h3>
+    <p><code>focus</code> 配線を削除し「🔄 履歴を更新」ボタンへ。クリックで
+       <code>compute_focus_update()</code> を<b>そのまま再利用</b>。「開く」と「再描画」が分離され
+       スナップバックが原理的に消え、Gradio バージョン非依存。
+       既存テスト <code>test_history_dropdown_focus.py</code> は<b>無改変で流用</b>。</p>
+
+    <h3>変更内容（build_ui 内 L65-75 を置換）</h3>
+<pre><span class="c"># focus ハンドラ・配線を削除し以下へ</span>
+refresh_btn = gr.Button(<span class="k">"🔄 履歴を更新"</span>, size=<span class="k">"sm"</span>)
+
+def on_refresh(current_value):
+    fresh = _history_choices(base_dir)
+    new_choices, new_value = progress.compute_focus_update(current_value, fresh)
+    return gr.update(choices=new_choices, value=new_value)
+
+refresh_btn.click(fn=on_refresh, inputs=[history_dropdown], outputs=[history_dropdown])
+<span class="c"># change(...) 詳細連動は維持 / return [history_dropdown, resume_check] は不変</span></pre>
+
+    <h3>L2 実機確認</h3>
+    <p>2件以上（interrupted 含む）の履歴で2件目以降をクリック →
+       <b>スナップバックせず選択保持・詳細更新</b>。生成後「🔄 履歴を更新」で反映。</p>
+    <div class="note"><b>意図的な挙動変更:</b> 「開いた瞬間の自動再計算」(UI-04)を廃止し、
+       ボタン押下時に再計算する方式へ。</div>
+  </div>
+
+  <!-- Verify -->
+  <div class="card verify">
+    <h2>✅ VERIFY / 整合事項</h2>
+    <h3>L1</h3>
+<pre>python -m pytest tests/test_resume_nested_variables.py \
+  tests/test_history_dropdown_focus.py tests/test_expander.py \
+  tests/test_history_v2.py -q
+python -m unittest discover tests   <span class="c"># 全体回帰</span></pre>
+    <h3>L2</h3>
+    <p>各節の実機手順。展開枚数は生成前の print で CPU でも検証可能。</p>
+    <ul>
+      <li>UI/生成の変更を含むため、最終 VERIFY は<b>別サブエージェントでブラインド検証</b>（tdd-forge 準拠）。</li>
+      <li>テストは全て <code>tests/</code> 配下に新規（<code>scripts/</code> 直下に置かない）。</li>
+      <li><code>variables.json</code> スキーマ・履歴フィールド名・API URL は不変（VL-07）。HIS-08 維持。</li>
+    </ul>
+
+    <h3>変更対象ファイル</h3>
+    <div>
+      <span class="pill">scripts/.../batch_runner.py <span class="muted">①</span></span>
+      <span class="pill">scripts/.../ui_builder.py <span class="muted">②</span></span>
+      <span class="pill">tests/test_resume_nested_variables.py <span class="muted">新規</span></span>
+      <span class="pill">tests/test_history_dropdown_focus.py <span class="muted">流用</span></span>
+    </div>
+
+    <h3>実装順序</h3>
+    <div class="flow">
+      <span class="step">① RED→GREEN→L2</span><span class="arrow">→</span>
+      <span class="step">② focus→更新ボタン→L2</span><span class="arrow">→</span>
+      <span class="step">全体L1回帰</span><span class="arrow">→</span>
+      <span class="step">ブラインドVERIFY</span>
+    </div>
+  </div>
+
+  <p class="sub" style="text-align:center">プラン本体(Markdown): <code>~/.claude/plans/batch-resume-promptexpander-2-1-mutable-lovelace.md</code></p>
+</div>
+</body>
+</html>

@@ -137,6 +137,20 @@ def merge_variables(
     return merged
 
 
+def merge_variables_for_resume(
+    inline_vars: dict[str, list[str]],
+    saved_vars: dict[str, list[str]],
+    json_vars: dict[str, list[str]],
+) -> dict[str, list[str]]:
+    """resume 時の変数マージ: 優先順位 inline > saved > json.
+
+    saved (履歴の used_variables) を再現性のため優先しつつ、saved に含まれない
+    ネスト先変数 ($変数 の値の中の $別変数) を現在の json_vars が補完する。
+    これにより再開時も多段展開が最後まで通る。
+    """
+    return merge_variables(inline_vars, merge_variables(saved_vars, json_vars))
+
+
 def extract_used_variables(
     body: str,
     variables: dict[str, list[str]] | None = None,
