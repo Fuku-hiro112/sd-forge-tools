@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>テストケース レビュー — 通常生成の履歴保存</title>
+<style>
+  :root{
+    --bg:#faf9f5; --surface:#ffffff; --border:#e8e6df; --border2:#f0eee8;
+    --ink:#1a1a18; --muted:#6b6862; --faint:#9a958c;
+    --accent:#c96442; --accent-soft:#f6e9e3;
+    --green:#3f7d52; --green-soft:#e8f1ea;
+    --blue:#3a6b8a; --blue-soft:#e6eef3;
+    --amber:#9a6a1f; --amber-soft:#f5ecd9;
+    --code-bg:#f7f5f0;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-sans-serif,-apple-system,"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;
+    line-height:1.7; padding:40px 20px; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:880px; margin:0 auto}
+  header{margin:0 0 32px}
+  h1{font-size:1.6rem; font-weight:650; margin:0 0 8px; letter-spacing:.01em}
+  .lead{color:var(--muted); margin:0; font-size:.96rem}
+  .meta{color:var(--faint); font-size:.82rem; margin-top:10px}
+  .legend{display:flex; flex-wrap:wrap; gap:8px; margin:20px 0 4px}
+  .tag{font-size:.72rem; font-weight:600; padding:3px 10px; border-radius:999px; white-space:nowrap}
+  .t-b1{background:var(--green-soft); color:var(--green)}
+  .t-step{background:var(--blue-soft); color:var(--blue)}
+  .t-reg{background:var(--amber-soft); color:var(--amber)}
+  .t-compat{background:#eeece6; color:var(--accent)}
+  section{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:22px 24px; margin:18px 0; box-shadow:0 1px 2px rgba(0,0,0,.03);
+  }
+  h2{font-size:1.08rem; font-weight:640; margin:0 0 4px; display:flex; align-items:center; gap:10px}
+  .cls{font-family:ui-monospace,"Cascadia Code",monospace; font-size:.82rem; color:var(--accent);
+       background:var(--accent-soft); padding:2px 9px; border-radius:6px}
+  .desc{color:var(--muted); font-size:.9rem; margin:2px 0 14px}
+  table{width:100%; border-collapse:collapse; font-size:.9rem}
+  th{text-align:left; font-weight:600; color:var(--faint); font-size:.78rem;
+     text-transform:uppercase; letter-spacing:.04em; padding:0 12px 8px; border-bottom:1px solid var(--border)}
+  td{padding:12px; border-bottom:1px solid var(--border2); vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .tname{font-family:ui-monospace,"Cascadia Code",monospace; font-size:.82rem; color:var(--ink); white-space:nowrap}
+  .exp{font-family:ui-monospace,"Cascadia Code",monospace; font-size:.8rem; color:var(--green);
+       background:var(--green-soft); padding:1px 7px; border-radius:5px; display:inline-block}
+  code{font-family:ui-monospace,"Cascadia Code",monospace; font-size:.84em;
+       background:var(--code-bg); padding:1px 6px; border-radius:5px}
+  .review{background:var(--accent-soft); border:1px solid #ecd9d0; border-radius:14px; padding:20px 24px; margin:24px 0}
+  .review h2{color:var(--accent)}
+  .review ol{margin:8px 0 0; padding-left:20px}
+  .review li{margin:7px 0; font-size:.92rem}
+  .q{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 18px; margin-top:14px}
+  .q-title{font-weight:600; font-size:.86rem; color:var(--muted); margin:0 0 8px}
+  .q ul{margin:0; padding-left:18px}
+  .q li{margin:5px 0; font-size:.9rem}
+  .foot{color:var(--faint); font-size:.8rem; text-align:center; margin-top:28px}
+  .pill{font-size:.74rem; color:var(--muted); background:var(--code-bg); border:1px solid var(--border);
+        border-radius:6px; padding:2px 9px; margin-right:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>テストケース レビュー</h1>
+    <p class="lead">通常生成（Prompt Expander 経由）の履歴保存・中断再開 / 再開再現性の修正 — L1 ユニットテスト</p>
+    <div class="meta">
+      <span class="pill">tests/test_normal_gen_history.py</span>
+      <span class="pill">14 tests</span>
+      <span class="pill">forge 非依存（stdlib のみで実行可）</span>
+      <span class="pill">RED（実装前・現状は失敗）</span>
+    </div>
+    <div class="legend">
+      <span class="tag t-b1">B1/B2/H4 不整合修正</span>
+      <span class="tag t-step">Step3 再開スライス</span>
+      <span class="tag t-step">A カウント</span>
+      <span class="tag t-reg">回帰ガード</span>
+      <span class="tag t-compat">後方互換</span>
+    </div>
+  </header>
+
+  <!-- 1 -->
+  <section>
+    <h2><span class="cls">TestGenerationDict</span> <span class="tag t-b1">B1</span></h2>
+    <p class="desc">generation 設定の組立・復元。clip_skip を保存し再開時に戻す（現状は欠落）。forge 非依存にするため <code>history_v2</code> に集約し <code>batch_runner.apply_resume_settings</code> が委譲する設計。</p>
+    <table>
+      <tr><th>テスト</th><th>検証内容</th><th>期待</th></tr>
+      <tr>
+        <td class="tname">build_generation_dict_<br>includes_clip_skip</td>
+        <td>dict に clip_skip / seed_mode / resolved_initial_seed / width / sampler が入る</td>
+        <td><span class="exp">clip_skip == 2</span></td>
+      </tr>
+      <tr>
+        <td class="tname">apply_generation_to_p_<br>restores_clip_skip</td>
+        <td>再開時に保存済み clip_skip 等が <code>p</code> へ戻る（<b>現状欠落の検出</b>）</td>
+        <td><span class="exp">p.clip_skip == 2</span></td>
+      </tr>
+      <tr>
+        <td class="tname">apply_generation_to_p_<br>does_not_touch_extension_state</td>
+        <td>hr_* など拡張設定に触れない（不変条件維持）</td>
+        <td><span class="exp">p.enable_hr 不変</span></td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- 2 -->
+  <section>
+    <h2><span class="cls">TestCreateEntry</span> <span class="tag t-b1">B2 / H4</span></h2>
+    <p class="desc">履歴エントリに「展開後ネガティブのスナップショット」と「使用機能」を保存する。</p>
+    <table>
+      <tr><th>テスト</th><th>検証内容</th><th>期待</th></tr>
+      <tr>
+        <td class="tname">stores_effective_negative</td>
+        <td>B2: 展開後ネガティブをスナップショット保存（再開の再現性）</td>
+        <td><span class="exp">prompt.effective_negative</span></td>
+      </tr>
+      <tr>
+        <td class="tname">stores_extensions</td>
+        <td>H4: 使用機能（hires / vram_recycler / source）を記録</td>
+        <td><span class="exp">extensions.hires == True</span></td>
+      </tr>
+      <tr>
+        <td class="tname">extensions_default_<br>backward_compat <span class="tag t-compat">互換</span></td>
+        <td>未指定時は従来の既定値、effective_negative は空（再計算へフォールバック）</td>
+        <td><span class="exp">"vram_safe_batch" in extensions</span></td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- 3 -->
+  <section>
+    <h2><span class="cls">TestComputeResumeSlice</span> <span class="tag t-step">Step3</span></h2>
+    <p class="desc">再開時、<code>completed</code> 枚をスキップして残りプロンプトだけ生成。seed は連番／固定を継続。標準 Forge ループで自然に再開できる。</p>
+    <table>
+      <tr><th>テスト</th><th>入力 → 検証内容</th><th>期待</th></tr>
+      <tr>
+        <td class="tname">sequential_skips_completed_<br>and_continues_seed</td>
+        <td>4枚中 completed=2、seed=1000 連番 → 残り2枚 + seed 継続</td>
+        <td><span class="exp">["p3","p4"], [1002,1003]</span></td>
+      </tr>
+      <tr>
+        <td class="tname">fixed_uses_same_seed</td>
+        <td>固定シードは全画像で同値</td>
+        <td><span class="exp">[555, 555]</span></td>
+      </tr>
+      <tr>
+        <td class="tname">completed_zero_returns_full</td>
+        <td>未着手（completed=0）→ 全件</td>
+        <td><span class="exp">[100, 101]</span></td>
+      </tr>
+      <tr>
+        <td class="tname">completed_ge_total_<br>returns_empty</td>
+        <td>完了済み（completed≥total）→ 空</td>
+        <td><span class="exp">[], n_iter=0</span></td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- 4 -->
+  <section>
+    <h2><span class="cls">TestProgressCount</span> <span class="tag t-step">A</span></h2>
+    <p class="desc">進捗カウントを iteration 基準にし、ADetailer/Hires が1プロンプトで複数画像を返しても過剰カウントしない（「生成されてないのにカウント」の根治）。</p>
+    <table>
+      <tr><th>テスト</th><th>検証内容</th><th>期待</th></tr>
+      <tr>
+        <td class="tname">compute_completed_fresh</td>
+        <td>新規: iteration(0-origin) → completed(1-origin)</td>
+        <td><span class="exp">(0,0)→1, (0,4)→5</span></td>
+      </tr>
+      <tr>
+        <td class="tname">compute_completed_<br>resume_offset</td>
+        <td>再開: offset=2 から最初の iteration は通算3枚目</td>
+        <td><span class="exp">(2,0)→3, (2,3)→6</span></td>
+      </tr>
+      <tr>
+        <td class="tname">should_count_iteration_<br>dedup</td>
+        <td>同一 iteration は1回だけ計上（複数画像でも）</td>
+        <td><span class="exp">2回目は False</span></td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- 5 -->
+  <section>
+    <h2><span class="cls">TestMergePriority</span> <span class="tag t-reg">回帰</span></h2>
+    <p class="desc">既存 <code>merge_variables_for_resume</code>（dd4f05c）の優先順位を固定。退行検出用。</p>
+    <table>
+      <tr><th>テスト</th><th>検証内容</th><th>期待</th></tr>
+      <tr>
+        <td class="tname">inline_over_saved_<br>over_json</td>
+        <td>inline &gt; saved &gt; json。欠落ネスト変数を json が補完</td>
+        <td><span class="exp">a=inline, b=saved, c=json</span></td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- レビューポイント -->
+  <div class="review">
+    <h2>レビューしてほしい点</h2>
+    <div class="q">
+      <p class="q-title">設計の前提（OK か確認）</p>
+      <ul>
+        <li>generation の組立／復元を <code>batch_runner</code> から <code>history_v2</code>（stdlib のみ＝単体実行可）へ集約し、<code>apply_resume_settings</code> はそこへ委譲する配置</li>
+        <li>進捗を <code>compute_completed</code> ＋ <code>should_count_iteration</code> の2純関数に分解</li>
+        <li>seed 期待値は既存 <code>compute_seed</code>（sequential = <code>initial+(global_num-1)</code>）に準拠</li>
+      </ul>
+    </div>
+    <div class="q">
+      <p class="q-title">判断してほしい点</p>
+      <ul>
+        <li>テストの粒度・期待値はこれで十分か</li>
+        <li><code>effective_negative</code> を <code>entry["prompt"]</code> 配下に置く構造でよいか（vs <code>entry</code> 直下）</li>
+        <li><code>extensions</code> に入れる項目（hires / vram_recycler / source / seed_mode）の範囲は十分か</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="foot">レビュー OK または修正指示で、RED 実行（assertion で正しく失敗することを確認）→ GREEN 実装へ進みます。</p>
+</div>
+</body>
+</html>
