@@ -70,7 +70,7 @@
     <p class="lead">通常生成（Prompt Expander 経由）の履歴保存・中断再開 / 再開再現性の修正 — L1 ユニットテスト</p>
     <div class="meta">
       <span class="pill">tests/test_normal_gen_history.py</span>
-      <span class="pill">14 tests</span>
+      <span class="pill">19 tests</span>
       <span class="pill">forge 非依存（stdlib のみで実行可）</span>
       <span class="pill">RED（実装前・現状は失敗）</span>
     </div>
@@ -127,6 +127,40 @@
         <td class="tname">extensions_default_<br>backward_compat <span class="tag t-compat">互換</span></td>
         <td>未指定時は従来の既定値、effective_negative は空（再計算へフォールバック）</td>
         <td><span class="exp">"vram_safe_batch" in extensions</span></td>
+      </tr>
+      <tr>
+        <td class="tname">effective_negative_snapshot_<br>reflects_active_expansion <span class="tag t-b1">追加</span></td>
+        <td><b>変数展開が有効なとき</b>、実際の expander で合成したネガティブ（base + 変数由来）がそのまま履歴に保存される</td>
+        <td><span class="exp">"text, bad anatomy, low quality"</span></td>
+      </tr>
+      <tr>
+        <td class="tname">entry_records_<br>expansion_order_param <span class="tag t-b1">追加</span></td>
+        <td>機能パラメータ: 変数展開順が履歴に渡っている</td>
+        <td><span class="exp">["char","outfit"]</span></td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- 2b: 拡張パラメータ -->
+  <section>
+    <h2><span class="cls">TestExtensionParams</span> <span class="tag t-b1">H4 追加</span></h2>
+    <p class="desc">機能ごとのパラメータを履歴に取り込む純関数 <code>collect_extension_params(p)</code>（forge 非依存・stub で単体テスト可）。Hires や <b>ADetailer の検出プロンプト</b>等を <code>p.script_args</code> から抽出する。</p>
+    <table>
+      <tr><th>テスト</th><th>検証内容</th><th>期待</th></tr>
+      <tr>
+        <td class="tname">captures_hires_params</td>
+        <td>Hires.fix の有効/スケール/アップスケーラを記録</td>
+        <td><span class="exp">{enabled:True, scale:2.0, upscaler:"Latent"}</span></td>
+      </tr>
+      <tr>
+        <td class="tname">captures_adetailer_<br>detector_prompt</td>
+        <td><b>ADetailer の ad_prompt / ad_model / ad_negative_prompt</b> を alwayson script + script_args から抽出（先頭 enable フラグは無視）</td>
+        <td><span class="exp">ad_prompt == "detailed face, makeup"</span></td>
+      </tr>
+      <tr>
+        <td class="tname">empty_when_no_extensions</td>
+        <td>拡張なし: hires は enabled=False、adetailer キーは付かない</td>
+        <td><span class="exp">"adetailer" not in ext</span></td>
       </tr>
     </table>
   </section>
@@ -214,7 +248,8 @@
       <ul>
         <li>テストの粒度・期待値はこれで十分か</li>
         <li><code>effective_negative</code> を <code>entry["prompt"]</code> 配下に置く構造でよいか（vs <code>entry</code> 直下）</li>
-        <li><code>extensions</code> に入れる項目（hires / vram_recycler / source / seed_mode）の範囲は十分か</li>
+        <li><b>ADetailer パラメータ抽出の深さ</b>: 今は <code>ad_prompt / ad_model / ad_negative_prompt</code> をベストエフォート抽出。ADetailer の版差でキー構造が変わり得るため<b>「記録用（参考情報）」に留め、再開時の復元には使わない</b>方針で良いか。抽出失敗時は静かに省略（履歴記録は継続）</li>
+        <li>他に履歴へ残したい拡張パラメータはあるか（例: Hires steps / denoising、ControlNet、sd-forge-couple など）</li>
       </ul>
     </div>
   </div>

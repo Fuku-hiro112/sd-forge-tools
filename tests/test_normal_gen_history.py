@@ -116,6 +116,38 @@ class TestCreateEntry(unittest.TestCase):
         # effective_negative 未指定なら空文字（再開時に再計算へフォールバック）
         self.assertEqual(e["prompt"].get("effective_negative", ""), "")
 
+    def test_effective_negative_snapshot_reflects_active_expansion(self):
+        # ユーザー要望: Prompt Expander の変数展開が「有効なとき」に、
+        # 展開で得られる合成ネガティブがそのまま履歴に保存されることを検証。
+        # 実際の expander 関数で「展開時に得られる effective_negative」を作る。
+        body = "$char, masterpiece"
+        variables = {"char": ["1girl, alice"]}          # positive 展開が有効
+        negative_dict = {"char": ["bad anatomy, low quality"]}
+        neg_additions = expander.collect_negative_additions(body, variables, negative_dict)
+        effective = expander.compose_negative_prompt("text", neg_additions)
+        # 前提: 展開有効時に変数由来ネガティブが合成される
+        self.assertEqual(neg_additions, ["bad anatomy, low quality"])
+        self.assertEqual(effective, "text, bad anatomy, low quality")
+        # 本命: その合成結果が履歴にスナップショットされる
+        e = history_v2.create_entry(
+            prompt_main=body, prompt_negative="text",
+            expansion_order=["char"], used_variables=variables,
+            generation=self._gen(), effective_negative=effective,
+        )
+        self.assertEqual(
+            e["prompt"]["effective_negative"], "text, bad anatomy, low quality"
+        )
+
+    def test_entry_records_expansion_order_param(self):
+        # 機能ごとのパラメータ: 変数展開順が履歴に渡っていること
+        e = history_v2.create_entry(
+            prompt_main="$char, $outfit", prompt_negative="",
+            expansion_order=["char", "outfit"],
+            used_variables={"char": ["a"], "outfit": ["b"]},
+            generation=self._gen(),
+        )
+        self.assertEqual(e["prompt"]["expansion_order"], ["char", "outfit"])
+
 
 # ============================================================
 #  Step3: 再開スライス（completed 枚スキップ + seed 継続）
@@ -181,6 +213,44 @@ class TestProgressCount(unittest.TestCase):
         counted.add(0)
         self.assertFalse(progress.should_count_iteration(counted, 0))
         self.assertTrue(progress.should_count_iteration(counted, 1))
+
+
+# ============================================================
+#  H4: 機能ごとのパラメータ収集（hires / ADetailer 検出プロンプト等）
+# ============================================================
+class TestExtensionParams(unittest.TestCase):
+    def test_captures_hires_params(self):
+        # Hires.fix の有効/スケール/アップスケーラを記録
+        p = _stub_p(enable_hr=True, hr_scale=2.0, hr_upscaler="Latent")
+        ext = history_v2.collect_extension_params(p)
+        self.assertEqual(
+            ext["hires"], {"enabled": True, "scale": 2.0, "upscaler": "Latent"}
+        )
+
+    def test_captures_adetailer_detector_prompt(self):
+        # ADetailer の検出プロンプト(ad_prompt)等を p.script_args から抽出
+        ad_script = types.SimpleNamespace(
+            title=lambda: "ADetailer", args_from=0, args_to=2
+        )
+        p = _stub_p()
+        p.scripts = types.SimpleNamespace(alwayson_scripts=[ad_script])
+        p.script_args = [
+            True,  # enable フラグ（先頭）は無視される
+            {"ad_model": "face_yolov8n.pt",
+             "ad_prompt": "detailed face, makeup",
+             "ad_negative_prompt": "blurry"},
+        ]
+        ext = history_v2.collect_extension_params(p)
+        self.assertEqual(ext["adetailer"]["ad_prompt"], "detailed face, makeup")
+        self.assertEqual(ext["adetailer"]["ad_model"], "face_yolov8n.pt")
+        self.assertEqual(ext["adetailer"]["ad_negative_prompt"], "blurry")
+
+    def test_empty_when_no_extensions(self):
+        # 拡張なし: hires は enabled=False、adetailer キーは付かない
+        p = _stub_p(enable_hr=False)
+        ext = history_v2.collect_extension_params(p)
+        self.assertEqual(ext["hires"]["enabled"], False)
+        self.assertNotIn("adetailer", ext)
 
 
 # ============================================================
