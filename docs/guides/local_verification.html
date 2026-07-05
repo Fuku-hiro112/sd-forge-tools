@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ローカル検証手順 — 履歴保存・再現性修正</title>
+<style>
+  :root{
+    --bg:#faf9f5; --surface:#ffffff; --border:#e8e6df; --border2:#f0eee8;
+    --ink:#1a1a18; --muted:#6b6862; --faint:#9a958c;
+    --accent:#c96442; --accent-soft:#f6e9e3;
+    --green:#3f7d52; --green-soft:#e8f1ea;
+    --blue:#3a6b8a; --blue-soft:#e6eef3;
+    --amber:#9a6a1f; --amber-soft:#f5ecd9;
+    --code-bg:#f4f1ea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-sans-serif,-apple-system,"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;
+    line-height:1.75; padding:40px 20px;}
+  .wrap{max-width:880px; margin:0 auto}
+  h1{font-size:1.55rem; font-weight:650; margin:0 0 8px}
+  .lead{color:var(--muted); margin:0 0 6px; font-size:.95rem}
+  .pill{display:inline-block; font-size:.74rem; color:var(--muted); background:var(--code-bg);
+        border:1px solid var(--border); border-radius:6px; padding:2px 9px; margin:6px 6px 0 0}
+  section{background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:20px 24px; margin:18px 0; box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .lv{border-left:4px solid var(--blue)}
+  .l1{border-left:4px solid var(--green)}
+  .l2{border-left:4px solid var(--amber)}
+  h2{font-size:1.1rem; font-weight:640; margin:0 0 4px; display:flex; align-items:center; gap:10px}
+  .tag{font-size:.72rem; font-weight:600; padding:3px 10px; border-radius:999px}
+  .t-l1{background:var(--green-soft); color:var(--green)}
+  .t-l2{background:var(--amber-soft); color:var(--amber)}
+  .desc{color:var(--muted); font-size:.9rem; margin:2px 0 12px}
+  pre{background:#20201d; color:#eceae4; border-radius:10px; padding:14px 16px; overflow-x:auto;
+      font-size:.82rem; line-height:1.55; margin:10px 0}
+  pre .c{color:#8f8b80}
+  pre .g{color:#8fd6a5}
+  code{font-family:ui-monospace,"Cascadia Code",monospace; font-size:.85em;
+       background:var(--code-bg); padding:1px 6px; border-radius:5px}
+  table{width:100%; border-collapse:collapse; font-size:.9rem; margin:6px 0}
+  th{text-align:left; font-weight:600; color:var(--faint); font-size:.76rem; text-transform:uppercase;
+     letter-spacing:.04em; padding:0 10px 8px; border-bottom:1px solid var(--border)}
+  td{padding:11px 10px; border-bottom:1px solid var(--border2); vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .step{font-weight:600; color:var(--accent); white-space:nowrap}
+  .ok{font-family:ui-monospace,monospace; font-size:.82rem; color:var(--green);
+      background:var(--green-soft); padding:1px 7px; border-radius:5px; display:inline-block}
+  ol{margin:6px 0; padding-left:20px} li{margin:5px 0; font-size:.92rem}
+  .note{background:var(--blue-soft); border:1px solid #cfe0ea; border-radius:10px;
+        padding:12px 16px; font-size:.88rem; margin:12px 0}
+  .foot{color:var(--faint); font-size:.8rem; text-align:center; margin-top:26px}
+  b.k{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>ローカル検証手順</h1>
+  <p class="lead">通常生成の履歴保存・再現性修正（現時点の変更）をローカルで確認する方法</p>
+  <div>
+    <span class="pill">L1 = 自動テスト（forge 不要）</span>
+    <span class="pill">L2/L3 = forge 実機</span>
+    <span class="pill">対象: Batch Resume 経路の B1 / B2 / H4</span>
+  </div>
+
+  <!-- スコープ注意 -->
+  <div style="background:var(--accent-soft);border:1px solid #ecd9d0;border-radius:14px;padding:16px 22px;margin:18px 0">
+    <h2 style="color:var(--accent)">⚠ 今回確認できる範囲</h2>
+    <p class="desc" style="margin:4px 0 6px">現時点で実装済みなのは <b>共通ヘルパ（L1）</b> と <b>Batch Resume 経路の再現性修正</b>（clip_skip 復元 / ネガティブのスナップショット / 使用機能の記録）です。</p>
+    <p class="desc" style="margin:0"><b class="k">未実装:</b> 「通常生成（Script 未選択）で履歴を積む・再開する」UI（Step2/3）。したがって<b>通常生成で履歴が積まれる確認はまだできません</b>。この HTML は現在の変更分の検証手順です。</p>
+  </div>
+
+  <!-- L1 -->
+  <section class="l1">
+    <h2><span class="tag t-l1">L1</span> 自動テスト（forge 不要・最初にこれ）</h2>
+    <p class="desc">リポジトリのルートで実行。純関数（履歴 dict 組立・復元・再開スライス・カウント）を検証します。</p>
+<pre><span class="c"># リポジトリのルートで</span>
+cd /path/to/sd-forge-tools
+python -m unittest tests.test_normal_gen_history -v
+
+<span class="c"># 期待</span>
+<span class="g">Ran 19 tests ... OK</span></pre>
+    <p class="desc" style="margin-top:10px">履歴エントリの構造を目視したい場合（forge 不要のスナップショット確認）:</p>
+<pre>python - &lt;&lt;'PY'
+import sys, json; sys.path.insert(0, "scripts")
+from types import SimpleNamespace
+from vram_safe_batch_modules import history_v2 as h
+p = SimpleNamespace(width=512, height=768, cfg_scale=7, steps=20,
+    sampler_name="Euler a", scheduler="Karras", seed=123, clip_skip=2,
+    enable_hr=True, hr_scale=2.0, hr_upscaler="Latent")
+e = h.create_entry("$char, masterpiece", "text", ["char"], {"char": ["alice"]},
+    h.build_generation_dict(p, "sequential", 123),
+    extensions={"source": "batch_resume", "seed_mode": "sequential",
+                **h.collect_extension_params(p)},
+    effective_negative="text, bad anatomy")
+print(json.dumps(e, ensure_ascii=False, indent=2))
+PY</pre>
+    <p class="desc" style="margin-top:4px"><code>generation.clip_skip</code> / <code>prompt.effective_negative</code> / <code>extensions.hires</code> が入っていれば OK。</p>
+  </section>
+
+  <!-- 導入 -->
+  <section class="lv">
+    <h2>forge へ反映（L2/L3 の前に）</h2>
+    <p class="desc">更新したファイルを forge にコピーし、古い .pyc を消してから再起動します。</p>
+<pre>FORGE=/path/to/stable-diffusion-webui-forge
+cp -r scripts/* $FORGE/scripts/
+<span class="c"># 古いキャッシュを削除（重要）</span>
+find $FORGE/scripts/vram_safe_batch_modules -name '*.pyc' -delete
+<span class="c"># forge を再起動</span></pre>
+    <div class="note">履歴ファイルは <code>$FORGE/batch_history.json</code>、変数は <code>$FORGE/vars/variables.json</code> です。確認は <code>cat $FORGE/batch_history.json</code>（jq があれば <code>| jq '.entries[0]'</code>）。</div>
+  </section>
+
+  <!-- L2/L3 -->
+  <section class="l2">
+    <h2><span class="tag t-l2">L2/L3</span> forge 実機テスト</h2>
+    <p class="desc">共通の前提: メインプロンプトに <code>$char, masterpiece</code>（<code>$char</code> は 2 値以上定義＝複数枚生成）。Script = <b>Batch Resume</b> を選択。</p>
+    <table>
+      <tr><th>#</th><th>手順</th><th>期待（合格条件）</th></tr>
+      <tr>
+        <td class="step">A<br>B1</td>
+        <td><b>clip_skip 復元</b><ol>
+          <li>Clip skip = <b>2</b> に設定して Generate → 1 枚目の後に Interrupt</li>
+          <li>Clip skip を <b>1</b> に変更</li>
+          <li>「📂 途中再開」で当該履歴を選択 → 「再開する」ON → Generate</li>
+        </ol></td>
+        <td>再開画像の infotext が <span class="ok">Clip skip: 2</span>（1 ではなく履歴の 2 が復元）</td>
+      </tr>
+      <tr>
+        <td class="step">B<br>B2</td>
+        <td><b>ネガティブのスナップショット</b>（前提: <code>$char</code> に negative 値を設定済み）<ol>
+          <li>ネガティブ <code>text</code> で Generate → Interrupt</li>
+          <li><code>vars/variables.json</code>（or Variable Manager）で <code>$char</code> の negative を<b>別の語に変更</b></li>
+          <li>同じ履歴から再開</li>
+        </ol></td>
+        <td>再開画像の Negative prompt が<b>変更前（履歴保存時）の値</b>。編集後の語は入らない</td>
+      </tr>
+      <tr>
+        <td class="step">C<br>H4</td>
+        <td><b>使用機能の記録</b><ol>
+          <li>Hires.fix ON（scale 2）＋ ADetailer ON（ad_prompt に <code>detailed face</code>）</li>
+          <li>Generate（1 枚生成されれば Interrupt で可）</li>
+          <li><code>$FORGE/batch_history.json</code> の先頭エントリを開く</li>
+        </ol></td>
+        <td><span class="ok">extensions.source == "batch_resume"</span> / <span class="ok">extensions.hires.enabled == true</span> / <span class="ok">extensions.adetailer.ad_prompt == "detailed face"</span> / <span class="ok">prompt.effective_negative</span> あり</td>
+      </tr>
+      <tr>
+        <td class="step">D<br>L3</td>
+        <td><b>CUDA / 連続生成</b><ol>
+          <li>A〜C の生成中、起動ログに <code>Device: cuda</code></li>
+          <li>同じバッチを 3 回連続 → VRAM が単調増加しない（<code>nvidia-smi</code>）</li>
+          <li>中断→再開で歯抜け（欠番）が出ない</li>
+        </ol></td>
+        <td>CPU fallback なし・VRAM 蓄積なし・生成画像が破綻していない</td>
+      </tr>
+    </table>
+    <div class="note">Test A/B は「再開時に履歴の設定が正しく戻るか」の確認です。<b>再開再現性（B1/B2）は今回の主眼</b>なので重点的にお願いします。</div>
+  </section>
+
+  <p class="foot">L1 が緑 & A〜D が期待通りなら、現在の変更（Step1/4）は確認完了。次は Step2/3（通常生成での履歴記録・再開 UI）に進みます。</p>
+</div>
+</body>
+</html>
