@@ -113,6 +113,7 @@ def create_entry(
     used_variables: dict[str, list[str]],
     generation: dict,
     extensions: Optional[dict] = None,
+    effective_negative: Optional[str] = None,
 ) -> dict:
     now = datetime.now()
     eid = now.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
@@ -123,12 +124,129 @@ def create_entry(
         "prompt": {
             "main": prompt_main,
             "negative": prompt_negative,
+            # 展開後ネガティブのスナップショット。再開時はこれを優先使用し、
+            # 空なら現在の variables.json から再計算にフォールバックする。
+            "effective_negative": effective_negative or "",
             "expansion_order": list(expansion_order),
             "used_variables": dict(used_variables),
         },
         "generation": dict(generation),
         "progress": {"completed": 0, "total": 0, "status": "running"},
     }
+
+
+def build_generation_dict(p, seed_mode: str, resolved_initial_seed) -> dict:
+    """p から履歴保存用の generation dict を組み立てる純関数（clip_skip 含む）.
+
+    batch_runner / prompt_expander の両経路がこれを使い、記録内容のドリフトを防ぐ。
+    """
+    return {
+        "width": getattr(p, "width", None),
+        "height": getattr(p, "height", None),
+        "cfg_scale": getattr(p, "cfg_scale", None),
+        "steps": getattr(p, "steps", None),
+        "sampler": getattr(p, "sampler_name", None),
+        "scheduler": getattr(p, "scheduler", "Automatic"),
+        "initial_seed": getattr(p, "seed", None),
+        "resolved_initial_seed": resolved_initial_seed,
+        "seed_mode": seed_mode,
+        "clip_skip": getattr(p, "clip_skip", 1),
+    }
+
+
+def apply_generation_to_p(p, generation: Optional[dict]):
+    """履歴の generation 設定を p に反映する（再開用）.
+
+    width/height/cfg_scale/steps/sampler/scheduler/seed/clip_skip を復元する。
+    ADetailer / Hires.fix / sd-forge-couple などの拡張設定（scripts / script_args /
+    extra_generation_params / styles / hr_* / override_settings）には触れない。
+    これらは履歴に保存されず、現在の UI 状態から引き継がれる前提。
+
+    Returns:
+        (seed_mode, resolved_initial_seed)
+    """
+    g = generation or {}
+    p.width = g.get("width", getattr(p, "width", None))
+    p.height = g.get("height", getattr(p, "height", None))
+    p.cfg_scale = g.get("cfg_scale", getattr(p, "cfg_scale", None))
+    p.steps = g.get("steps", getattr(p, "steps", None))
+    p.sampler_name = g.get("sampler", getattr(p, "sampler_name", None))
+    if hasattr(p, "scheduler"):
+        p.scheduler = g.get("scheduler", p.scheduler)
+    # clip_skip は保存されている場合のみ復元（未保存の旧エントリを壊さない）
+    if "clip_skip" in g:
+        p.clip_skip = g.get("clip_skip")
+    seed_mode = g.get("seed_mode", "sequential")
+    resolved_initial_seed = g.get(
+        "resolved_initial_seed",
+        g.get("initial_seed", getattr(p, "seed", None)),
+    )
+    p.seed = resolved_initial_seed
+    return seed_mode, resolved_initial_seed
+
+
+def _script_title(s) -> str:
+    t = getattr(s, "title", None)
+    if callable(t):
+        t = t()
+    return t if isinstance(t, str) else ""
+
+
+def _arg_get(obj, key: str):
+    """dict / dataclass 風オブジェクトのどちらからでも属性を引く."""
+    if isinstance(obj, dict):
+        return obj.get(key)
+    return getattr(obj, key, None)
+
+
+def _collect_adetailer_params(p) -> Optional[dict]:
+    """p.script_args から ADetailer の検出プロンプト等をベストエフォート抽出.
+
+    版差でキー構造が変わり得るため「記録用（参考情報）」に留め、再開復元には使わない。
+    見つからない場合は None。
+    """
+    scripts_obj = getattr(p, "scripts", None)
+    alwayson = getattr(scripts_obj, "alwayson_scripts", None) or []
+    script_args = list(getattr(p, "script_args", None) or [])
+    for s in alwayson:
+        if "adetailer" not in _script_title(s).lower():
+            continue
+        a = getattr(s, "args_from", None)
+        b = getattr(s, "args_to", None)
+        if not isinstance(a, int) or not isinstance(b, int):
+            continue
+        for item in script_args[a:b]:
+            model = _arg_get(item, "ad_model")
+            prompt = _arg_get(item, "ad_prompt")
+            if model is None and prompt is None:
+                continue  # 先頭 enable フラグ等はスキップ
+            return {
+                "ad_model": model,
+                "ad_prompt": prompt,
+                "ad_negative_prompt": _arg_get(item, "ad_negative_prompt"),
+            }
+    return None
+
+
+def collect_extension_params(p) -> dict:
+    """履歴に残す「使用機能ごとのパラメータ」を p から収集する純関数.
+
+    Hires.fix の設定と ADetailer の検出プロンプト等を best-effort で拾う。
+    抽出できない拡張は静かに省略し、履歴記録自体は継続する。
+    """
+    out: dict = {}
+    if bool(getattr(p, "enable_hr", False)):
+        out["hires"] = {
+            "enabled": True,
+            "scale": getattr(p, "hr_scale", None),
+            "upscaler": getattr(p, "hr_upscaler", None),
+        }
+    else:
+        out["hires"] = {"enabled": False}
+    ad = _collect_adetailer_params(p)
+    if ad:
+        out["adetailer"] = ad
+    return out
 
 
 def add_entry(base_dir: str, entry: dict, max_entries: int = DEFAULT_MAX_ENTRIES) -> list[dict]:

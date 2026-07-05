@@ -29,22 +29,8 @@ def apply_resume_settings(p, generation):
     Returns:
         (seed_mode, resolved_initial_seed)
     """
-    g = generation or {}
-    p.width = g.get("width", p.width)
-    p.height = g.get("height", p.height)
-    p.cfg_scale = g.get("cfg_scale", p.cfg_scale)
-    p.steps = g.get("steps", p.steps)
-    p.sampler_name = g.get("sampler", p.sampler_name)
-    if hasattr(p, "scheduler"):
-        p.scheduler = g.get("scheduler", p.scheduler)
-    # §2: resume 時は seed_mode / resolved_initial_seed を復元
-    seed_mode = g.get("seed_mode", "sequential")
-    resolved_initial_seed = g.get(
-        "resolved_initial_seed",
-        g.get("initial_seed", p.seed),
-    )
-    p.seed = resolved_initial_seed
-    return seed_mode, resolved_initial_seed
+    # 記録ロジック単一化のため history_v2 に委譲（clip_skip も復元。B1）
+    return history_v2.apply_generation_to_p(p, generation)
 
 
 def run_batch(p, history_dropdown, resume_check, *, repo_root):
@@ -173,14 +159,19 @@ def run_batch(p, history_dropdown, resume_check, *, repo_root):
         if parsed.has_legacy_n_notation:
             print("[vram_safe_batch] ⚠ 警告: 旧 {N} 記法は廃止されました。$変数 記法を使用してください")
         expanded_prompts = expander.expand_prompts(parsed.body, merged, order)
-        try:
-            negative_dict = variables_store.load_negative_dict(_variables_path)
-        except Exception:
-            negative_dict = {}
-        neg_additions = expander.collect_negative_additions(parsed.body, merged, negative_dict)
-        effective_negative = expander.compose_negative_prompt(negative, neg_additions)
-        if neg_additions:
-            print(f"[v3b] ネガティブ自動追加: {neg_additions}")
+        # B2: 履歴に保存された展開後ネガティブを優先。無ければ現在の variables.json から再計算
+        saved_effective = (resume_entry or {}).get("prompt", {}).get("effective_negative", "")
+        if saved_effective:
+            effective_negative = saved_effective
+        else:
+            try:
+                negative_dict = variables_store.load_negative_dict(_variables_path)
+            except Exception:
+                negative_dict = {}
+            neg_additions = expander.collect_negative_additions(parsed.body, merged, negative_dict)
+            effective_negative = expander.compose_negative_prompt(negative, neg_additions)
+            if neg_additions:
+                print(f"[v3b] ネガティブ自動追加: {neg_additions}")
         precomputed_seeds = None
 
     total_images = len(expanded_prompts)
@@ -214,18 +205,13 @@ def run_batch(p, history_dropdown, resume_check, *, repo_root):
             prompt_negative=negative,
             expansion_order=order,
             used_variables=used_vars_for_history,
-            generation={
-                "width": p.width,
-                "height": p.height,
-                "cfg_scale": p.cfg_scale,
-                "steps": p.steps,
-                "sampler": p.sampler_name,
-                "scheduler": getattr(p, "scheduler", "Automatic"),
-                "initial_seed": p.seed,
-                "resolved_initial_seed": resolved_initial_seed,
+            generation=history_v2.build_generation_dict(p, seed_mode, resolved_initial_seed),
+            extensions={
+                "source": "batch_resume",
                 "seed_mode": seed_mode,
-                "clip_skip": getattr(p, "clip_skip", 1),
+                **history_v2.collect_extension_params(p),
             },
+            effective_negative=effective_negative,
         )
         entry["progress"]["total"] = total_images
         history_v2.add_entry(base_dir, entry)

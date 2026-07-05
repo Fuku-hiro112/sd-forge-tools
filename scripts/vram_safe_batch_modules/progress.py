@@ -40,6 +40,43 @@ def compute_seed(mode: str, initial_seed: int, global_num: int) -> int:
     raise ValueError(f"compute_seed: unknown mode {mode!r}")
 
 
+def compute_resume_slice(expanded, seed_mode: str, resolved_initial_seed: int, completed: int):
+    """再開時、completed 枚をスキップした残りのプロンプトとシード列を返す純関数.
+
+    標準生成ループは「残りプロンプトだけ生成」で自然に再開できる。
+    seed は元の通し番号（1-origin）を維持するため、completed+1 枚目から compute_seed で再計算する。
+
+    Returns:
+        (prompts, seeds, n_iter)
+    """
+    if completed < 0:
+        completed = 0
+    prompts = list(expanded[completed:])
+    seeds = [
+        compute_seed(seed_mode, resolved_initial_seed, completed + i + 1)
+        for i in range(len(prompts))
+    ]
+    return prompts, seeds, len(prompts)
+
+
+def compute_completed(resume_offset: int, iteration: int) -> int:
+    """iteration（0-origin）を通算完了枚数（1-origin）に変換する純関数.
+
+    resume_offset は再開時に既に完了している枚数。新規生成では 0。
+    ADetailer/Hires が 1 iteration で複数 image を返しても、iteration 基準なので過剰カウントしない。
+    """
+    return resume_offset + iteration + 1
+
+
+def should_count_iteration(counted_iterations, iteration: int) -> bool:
+    """その iteration をまだ数えていなければ True（重複カウント防止の純関数）.
+
+    呼び出し側が counted_iterations に iteration を追加して状態を進める。
+    同一 iteration で postprocess_image が複数回呼ばれても 1 回しか計上しない。
+    """
+    return iteration not in counted_iterations
+
+
 def should_update_completed(success: bool, is_interrupted: bool) -> bool:
     """§3: completed カウンタを進めて良いかを返す純粋関数.
 
