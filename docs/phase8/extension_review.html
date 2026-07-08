@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>拡張レビュー — プログラム面・機能面・標準機能との重複</title>
+<style>
+  :root{
+    --bg:#faf9f5; --surface:#ffffff; --border:#e8e6df; --border2:#f0eee8;
+    --ink:#1a1a18; --muted:#6b6862; --faint:#9a958c;
+    --accent:#c96442; --accent-soft:#f6e9e3;
+    --green:#3f7d52; --green-soft:#e8f1ea;
+    --blue:#3a6b8a; --blue-soft:#e6eef3;
+    --amber:#9a6a1f; --amber-soft:#f5ecd9;
+    --red:#a33d3d; --red-soft:#f7e7e5;
+    --code-bg:#f4f1ea;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-sans-serif,-apple-system,"Hiragino Kaku Gothic ProN","Meiryo",sans-serif;
+    line-height:1.75; padding:40px 20px}
+  .wrap{max-width:920px; margin:0 auto}
+  h1{font-size:1.55rem; font-weight:650; margin:0 0 8px}
+  .lead{color:var(--muted); margin:0 0 4px; font-size:.95rem}
+  .pill{display:inline-block; font-size:.74rem; color:var(--muted); background:var(--code-bg);
+        border:1px solid var(--border); border-radius:6px; padding:2px 9px; margin:6px 6px 0 0}
+  section{background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:20px 24px; margin:18px 0; box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .sev-r{border-left:4px solid var(--red)}
+  .sev-o{border-left:4px solid var(--amber)}
+  .sev-y{border-left:4px solid var(--blue)}
+  .sev-w{border-left:4px solid var(--faint)}
+  h2{font-size:1.12rem; font-weight:640; margin:0 0 4px; display:flex; align-items:center; gap:10px}
+  h3{font-size:.98rem; font-weight:640; margin:16px 0 4px; color:var(--accent)}
+  .tag{font-size:.72rem; font-weight:700; padding:3px 10px; border-radius:999px; white-space:nowrap}
+  .t-red{background:var(--red-soft); color:var(--red)}
+  .t-amber{background:var(--amber-soft); color:var(--amber)}
+  .t-blue{background:var(--blue-soft); color:var(--blue)}
+  .t-gray{background:#eeece6; color:var(--muted)}
+  .t-green{background:var(--green-soft); color:var(--green)}
+  .desc{color:var(--muted); font-size:.9rem; margin:2px 0 12px}
+  table{width:100%; border-collapse:collapse; font-size:.88rem; margin:6px 0}
+  th{text-align:left; font-weight:600; color:var(--faint); font-size:.76rem; text-transform:uppercase;
+     letter-spacing:.04em; padding:0 10px 8px; border-bottom:1px solid var(--border)}
+  td{padding:11px 10px; border-bottom:1px solid var(--border2); vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .id{font-weight:700; color:var(--accent); white-space:nowrap}
+  code{font-family:ui-monospace,"Cascadia Code",monospace; font-size:.84em;
+       background:var(--code-bg); padding:1px 6px; border-radius:5px}
+  pre{background:#20201d; color:#eceae4; border-radius:10px; padding:12px 15px; overflow-x:auto;
+      font-size:.8rem; line-height:1.55; margin:8px 0}
+  pre .c{color:#8f8b80} pre .r{color:#e89a8f} pre .g{color:#8fd6a5}
+  .note{background:var(--blue-soft); border:1px solid #cfe0ea; border-radius:10px;
+        padding:12px 16px; font-size:.88rem; margin:12px 0}
+  .verdict{font-weight:600}
+  .foot{color:var(--faint); font-size:.8rem; text-align:center; margin-top:26px}
+  ul{margin:6px 0; padding-left:20px} li{margin:5px 0; font-size:.9rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>拡張レビュー</h1>
+  <p class="lead">プログラム面のバグ / 機能面（必要性・動作性）/ Stable Diffusion 標準機能との重複 を対象にコード精読でレビュー</p>
+  <div>
+    <span class="pill">対象: 全 5 成果物 + 共有モジュール + Variable Manager JS</span>
+    <span class="pill">🔴 動作しない・バグ確定</span>
+    <span class="pill">🟠 高確度の疑い（要実機確認）</span>
+    <span class="pill">🟡 標準機能と重複 / 必要性疑問</span>
+    <span class="pill">⚪ デッドコード・削除候補</span>
+  </div>
+
+  <!-- サマリ -->
+  <section>
+    <h2>📋 サマリ（重要度順）</h2>
+    <table>
+      <tr><th style="width:70px">ID</th><th>指摘</th><th style="width:120px">判定</th></tr>
+      <tr><td class="id">R-1</td><td>Variable Manager「Forge に送信」→「📥 投入」が<b>旧記法を出力し、現行 expander で一切パースされない</b></td><td><span class="tag t-red">🔴 動作しない</span></td></tr>
+      <tr><td class="id">R-2</td><td>CORS ミドルウェアが startup 後に二重登録 → 例外握り潰しで<b>未適用の可能性</b>（file:// の Manager 同期が全滅し得る）</td><td><span class="tag t-amber">🟠 要実機確認</span></td></tr>
+      <tr><td class="id">R-3</td><td>Prompt Expander の seed=-1 時 <code>all_seeds=[-1]*n</code> が forge 標準ループでそのまま流れる疑い</td><td><span class="tag t-amber">🟠 要実機確認</span></td></tr>
+      <tr><td class="id">R-4</td><td><code>peek_jobs</code> が GET なのに破壊的（1回で消費）→ タブ跨ぎ・失敗時にデータ消失</td><td><span class="tag t-amber">🟠 設計不備</span></td></tr>
+      <tr><td class="id">R-5</td><td>検索置換の<b>非正規表現モード</b>で置換文字列の <code>$&amp;</code>/<code>$1</code>（JS）・<code>\1</code>（Python）が誤解釈される</td><td><span class="tag t-red">🔴 バグ（エッジ）</span></td></tr>
+      <tr><td class="id">R-6</td><td>seed_mode「連番」は forge 標準バッチと同挙動（付加価値は「固定」のみ）/ 単一値変数は Styles と重複 / 総当り展開は X/Y/Z・dynamic-prompts と重複</td><td><span class="tag t-blue">🟡 標準と重複</span></td></tr>
+      <tr><td class="id">R-7</td><td>VRAM Recycler の <code>empty_cache</code> は速度低下トレードオフあり。効果の実測記録がない</td><td><span class="tag t-blue">🟡 必要性要検証</span></td></tr>
+      <tr><td class="id">R-8</td><td>デッドコード計 約1,600 行（job_builder_a/b・text_tools のプレビュー系・progress の旧履歴層）</td><td><span class="tag t-gray">⚪ 削除候補</span></td></tr>
+      <tr><td class="id">R-9</td><td>Prompt Expander がユーザーの Batch count/size を黙って上書き、ほか品質細目</td><td><span class="tag t-blue">🟡 品質</span></td></tr>
+    </table>
+  </section>
+
+  <!-- R-1 -->
+  <section class="sev-r">
+    <h2><span class="tag t-red">R-1 🔴</span> Variable Manager → Forge 送信テキストが旧記法（動作しない）</h2>
+    <p class="desc">ユーザーメモ「修正1: 実装ビルダーが旧実装になっている」の実体。コード根拠つきで確定。</p>
+    <p><b>経路:</b> Manager の <code>sendToForge()</code>（forge.js:223）→ <code>POST /set_jobs</code> → Prompt Expander の「📥 Variable Manager → メイン Prompt に投入」→ メインプロンプトに書き込み → 生成。</p>
+    <p><b>問題:</b> <code>builder.buildDefs()</code>（builder.js:187-201）が出力する定義行が現行 expander の文法と不一致:</p>
+<pre><span class="c">// builder.js が生成するテキスト（旧 v3b 記法）</span>
+<span class="r">char=1girl, alice !! bad anatomy</span>   <span class="c">← $ なし・!! ネガ記法</span>
+<span class="r">---</span>                                  <span class="c">← 「変数---」開始タグなし</span>
+<span class="r">$char // { a;b } // $outfit</span>          <span class="c">← { } シャッフル記法</span>
+
+<span class="c"># 現行 expander が要求する文法（expander.py）</span>
+<span class="g">変数---</span>
+<span class="g">$char = 1girl, alice</span>                 <span class="c">← _DEF_RE は行頭 $ 必須</span>
+<span class="g">---</span></pre>
+    <ul>
+      <li>定義行に <code>$</code> が無いため <code>_DEF_RE</code>（expander.py:38）にマッチせず、<b>変数定義がすべて本文扱い</b>になる</li>
+      <li><code>!! negative</code> 記法は expander に存在しない（negative は variables.json の negative フィールド経由のみ）</li>
+      <li><code>{ a;b }</code> シャッフル記法は存在せず、<code>_LEGACY_N_RE</code>（<code>{数字}</code>のみ）にも掛からないため<b>警告すら出ずリテラル残留</b></li>
+      <li>開始タグ <code>変数---</code> が無いので <code>---</code> 単独は区切りとして機能しない</li>
+    </ul>
+    <p class="verdict">→ 機能判断が必要: <b>(a)</b> builder を現行記法に更新して残す / <b>(b)</b> 「送信→投入」機能ごと廃止（Manager は variables.json 同期に専念。プロンプト構築は本文で直接 <code>$変数</code> を書く現行フローで足りる）。<b>個人的推奨は (b)</b>。sync_variables 経由の同期が既にあり、責務も明確になる。廃止なら pending_jobs / set_jobs / peek_jobs / 投入ボタン / builder.js の大半が削れる。</p>
+  </section>
+
+  <!-- R-2 -->
+  <section class="sev-o">
+    <h2><span class="tag t-amber">R-2 🟠</span> CORS ミドルウェア未適用の可能性（Manager 同期の生命線）</h2>
+    <p class="desc">api_endpoints.py:37-45 と prompt_expander.py:104-112 の両方が <code>on_app_started</code>（= サーバ起動後）に <code>app.add_middleware(CORSMiddleware)</code> を呼び、例外を <code>except: pass</code> で握り潰している。</p>
+    <ul>
+      <li>Starlette は起動後の <code>add_middleware</code> で <code>RuntimeError: Cannot add middleware after an application has started</code> を投げる実装がある → その場合 <b>CORS ヘッダは一切付かない</b></li>
+      <li>Manager は <code>file://</code> で開く設計（Origin: null）のため、CORS 未適用なら <b>sync/SSE/set_jobs 全て失敗</b>する</li>
+      <li>二重登録（両モジュール）自体も冗長。どちらか一方・確実な方法（例: FastAPI ルートで明示的にヘッダ付与、または forge の <code>--cors-allow-origins</code> 起動オプション案内）へ一本化すべき</li>
+    </ul>
+    <p class="verdict">→ 実機で <code>curl -i -H "Origin: null" http://127.0.0.1:7860/vram_safe_batch/api/variables</code> を実行し、<code>access-control-allow-origin</code> ヘッダの有無を確認。無ければ修正必須（Manager が現在動いているなら Starlette 版が古く通っている＝バージョン依存の時限爆弾）。</p>
+  </section>
+
+  <!-- R-3/R-4/R-5 -->
+  <section class="sev-o">
+    <h2><span class="tag t-amber">R-3〜R-5</span> プログラム面のバグ・設計不備</h2>
+    <h3>R-3 🟠 Prompt Expander の seed=-1 処理（要 L2）</h3>
+    <p class="desc">prompt_expander.py:731-734 は seed=-1 のとき <code>p.all_seeds=[-1]*n</code> のまま forge に渡す。forge の processing はスクリプトが設定した all_seeds を尊重するため、<b>-1 がそのままサンプラー側に流れて全画像同一 seed になる/エラーになる</b>可能性がある（dynamic-prompts は事前に乱択してから渡す実装）。batch_runner 経由では補正される（batch_runner.py:116-121）が、<b>通常生成では補正が無い</b>。→ seed=-1 で 3 枚展開し、infotext の Seed が 3 枚で異なるか実機確認。</p>
+    <h3>R-4 🟠 peek_jobs の破壊的 GET</h3>
+    <p class="desc">api_endpoints.py:67-76。GET なのに 1 回で内部バッファを消費する。txt2img/img2img 両タブに投入ボタンがあるため、<b>片方で押すともう片方では「受信データなし」</b>。また投入 JS が textarea 反映に失敗しても（R-1 の textarea 不在等）バッファは既に消えており再試行不可。→ 消費は明示の DELETE/POST にするか、R-1 で機能ごと廃止なら本 API も削除。</p>
+    <h3>R-5 🔴 検索置換: 非正規表現モードの置換文字列エスケープ漏れ</h3>
+    <p class="desc">text_replace.js:81 の <code>text.replace(re, replacement)</code> は、<b>非 regex モードでも</b>置換文字列中の <code>$&amp;</code> <code>$`</code> <code>$'</code> <code>$1</code>〜を特殊解釈する（JS の仕様）。Python 側 text_tools.py:133 の <code>pattern.sub(replace, text)</code> も同様に <code>\1</code> <code>\g</code> を解釈する。プロンプトは <code>$変数</code> を多用するため「<code>alice</code> → <code>$1girl</code>」のような全置換で壊れる。1件置換（JS:67-68 の literal 連結パス）は安全で、<b>全置換のみ</b>のバグ。→ 非 regex 時は JS で <code>replacement.replace(/\$/g,"$$$$")</code>、Python で <code>re.sub</code> に <code>lambda m: replace</code> を渡す。</p>
+  </section>
+
+  <!-- R-6/R-7 標準機能重複 -->
+  <section class="sev-y">
+    <h2><span class="tag t-blue">R-6/R-7 🟡</span> Stable Diffusion 標準機能・既存拡張との重複</h2>
+    <table>
+      <tr><th>本拡張の機能</th><th>標準/既存の対応物</th><th>評価</th></tr>
+      <tr>
+        <td>シードモード「連番」（prompt_expander）</td>
+        <td><b>forge 標準のバッチ挙動そのもの</b>（Batch count で seed+i）</td>
+        <td>付加価値ゼロ。価値があるのは「固定」のみ。UI を「シード固定（構図維持）」チェックボックス 1 個に簡素化できる</td>
+      </tr>
+      <tr>
+        <td>単一値の <code>$変数</code>（例: <code>$quality</code> = 定型タグ集）</td>
+        <td><b>標準 Styles 機能</b>（保存済みスタイルの挿入・infotext 記録・UI 完備）</td>
+        <td>重複。本拡張の価値は「複数値の総当り」「negative 連動」「外部 Manager 編集」にあり、単一値用途は Styles を案内すべき（ユーザーメモ不具合1 = Styles 由来の事故もこの混同が背景）</td>
+      </tr>
+      <tr>
+        <td><code>$変数</code> 総当りバッチ</td>
+        <td>X/Y/Z plot「Prompt S/R」/ <code>prompts_from_file</code> / sd-dynamic-prompts combinatorial</td>
+        <td>README 自認済み。差別化点は「本文直書きの書き味 + <b>履歴/再開</b>」。逆に言えば履歴/再開が完成しない限り存在意義が弱い → 現在の Step2/3 実装が最重要という裏付け</td>
+      </tr>
+      <tr>
+        <td>VRAM Recycler（毎画像 <code>empty_cache</code>+<code>gc.collect</code>）</td>
+        <td>forge 自体のメモリ管理（load/offload 設定、<code>--always-offload-from-vram</code> 等）</td>
+        <td><code>empty_cache</code> は PyTorch のキャッシュ済みブロックを OS に返すだけで<b>次の確保が遅くなる</b>トレードオフ。断片化対策としては有効な環境もあるが、「効いた」実測（3 連続生成の VRAM 推移ログ）が残っていない。L3 で効果を数値記録し、効果が無ければ削除も検討</td>
+      </tr>
+      <tr>
+        <td>batch_runner 内の自前展開 fallback（batch_runner.py:124-146）</td>
+        <td>同リポジトリの prompt_expander（AlwaysOn で常時展開）</td>
+        <td><b>内部二重実装</b>。PE が AlwaysOn で常に populate する現設計では、fallback が生きるのは「PE のチェックを OFF にして Batch Resume だけ使う」場合のみ。展開エンジンを 2 系統保守するコスト大 → PE 必須化して fallback 削除を検討</td>
+      </tr>
+      <tr>
+        <td>Text Replace (Ctrl+F)</td>
+        <td>標準・既存拡張に対応物なし（ブラウザ Ctrl+F は textarea 内を検索できない）</td>
+        <td><span class="tag t-green">重複なし・存在意義明確</span>（R-5 の修正は必要）</td>
+      </tr>
+    </table>
+  </section>
+
+  <!-- R-8 デッドコード -->
+  <section class="sev-w">
+    <h2><span class="tag t-gray">R-8 ⚪</span> デッドコード（約 1,600 行・削除候補）</h2>
+    <table>
+      <tr><th>対象</th><th>行数</th><th>状態</th></tr>
+      <tr><td><code>job_builder_a.py</code> / <code>job_builder_b.py</code></td><td>208 + 823</td><td>import 参照ゼロ（grep 確認済み）。旧記法前提の旧ビルダー</td></tr>
+      <tr><td><code>text_tools.py</code> のカラープレビュー系（COLORS / <code>generate_preview_html</code> / <code>_colorize_*</code>、161 行目以降）</td><td>約 140</td><td>Python 側から未使用。<code>|数字</code> など旧記法前提の色分け。なお置換系関数も Python 側からは未使用（JS の「正本」としてのみ存在）だが、README の「L1 テストで担保」という前提のテストが現存しない</td></tr>
+      <tr><td><code>progress.py</code> の旧 v1 履歴層（<code>load_history</code>〜<code>is_resumable</code>、96 行目以降）</td><td>約 190</td><td>旧スキーマ（list）前提。v2 ファイル（dict）に呼ぶと黙って空を返す。<code>history_v2</code> と関数名・定数が二重定義で誤用リスク</td></tr>
+      <tr><td>（R-1 を廃止と判断した場合）<code>pending_jobs.py</code> + api_endpoints の set_jobs/status/peek_jobs + PE 投入ボタン + builder.js の組立系</td><td>約 400</td><td>R-1 の判断待ち</td></tr>
+    </table>
+  </section>
+
+  <!-- R-9 品質細目 -->
+  <section class="sev-y">
+    <h2><span class="tag t-blue">R-9 🟡</span> プログラム品質・UX の細目</h2>
+    <table>
+      <tr><th>箇所</th><th>指摘</th></tr>
+      <tr><td>prompt_expander.py:742-743</td><td>展開時に <code>p.n_iter=n, p.batch_size=1</code> でユーザーの Batch count / Batch size を<b>黙って上書き</b>。「4×4 で 16 枚」を期待したユーザーは展開数しか得られない。せめてログでなく UI に見える形で通知すべき</td></tr>
+      <tr><td>image_generator.py:85-92</td><td><code>except Exception → interrupted 扱い</code>。print はするが、UI 上は「中断」と区別できず<b>原因がユーザーに届かない</b>。エラー種別を履歴 status（例: "error"）に残すと再開判断がしやすい</td></tr>
+      <tr><td>history_v2.py:33</td><td>履歴 5 件は少ない（数百枚バッチを日常運用する想定なら 20〜50 件でもファイルサイズは軽微）。「1 つしか出ない」体感の一因にもなる</td></tr>
+      <tr><td>batch_runner.py:279-284</td><td>毎画像 read-modify-write で履歴全体を書き直す。規模的に実害は小さいが、他プロセス（Manager 等）との同時書込に弱い</td></tr>
+      <tr><td>prompt_expander.py:558-586</td><td><code>hidden_main_prompt_holder</code> + JS 文字列で textarea を読む手法は Gradio バージョン依存で壊れやすい（不具合6 の温床だった箇所）</td></tr>
+      <tr><td>prompt_expander.py:46-71</td><td><code>_detect_dynamic_prompts</code> は prompt-all-in-one も検出対象なのに、警告文言は dynamic-prompts 固定で誤解を招く</td></tr>
+      <tr><td>prompt_expander.py:234</td><td><code>sorting_priority=5</code> の「要 L2 確認」コメントが未消化のまま（dynamic-prompts より先に走る保証が未検証）</td></tr>
+      <tr><td>text_replace.js:120</td><td><code>ensureBackdrop</code> が呼ばれるたびに scroll リスナーを登録し得る（teardown 後の再オープンで重複）。実害は軽微だが addEventListener の重複ガード推奨</td></tr>
+      <tr><td>batch_runner.py:181-184</td><td><code>MAX_IMAGES_WARNING(100)</code> は print のみで抑止しない。誤って 10,000 枚展開しても走り出す。確認ダイアログ or 上限オプション化を検討</td></tr>
+    </table>
+  </section>
+
+  <!-- 推奨アクション -->
+  <section>
+    <h2>✅ 推奨アクション（優先順）</h2>
+    <table>
+      <tr><th style="width:60px">優先</th><th>アクション</th><th style="width:170px">種別</th></tr>
+      <tr><td>1</td><td><b>R-1 の機能判断</b>: 「Manager からプロンプト送信」を直すか廃止するか（推奨: 廃止して同期専念）</td><td><span class="tag t-red">ユーザー判断</span></td></tr>
+      <tr><td>2</td><td><b>R-2 実機確認</b>: CORS ヘッダの有無を curl 1 発で確認（Manager 同期の生命線）</td><td><span class="tag t-amber">L2 確認</span></td></tr>
+      <tr><td>3</td><td><b>R-3 実機確認</b>: 通常生成 + seed=-1 で各画像の Seed が異なるか</td><td><span class="tag t-amber">L2 確認</span></td></tr>
+      <tr><td>4</td><td><b>R-5 修正</b>: 全置換の置換文字列エスケープ（JS/Python 両方、テスト付き）</td><td><span class="tag t-red">バグ修正</span></td></tr>
+      <tr><td>5</td><td><b>R-8 掃除</b>: job_builder / text_tools プレビュー系 / progress 旧履歴の削除（挙動不変・回帰テスト容易）</td><td><span class="tag t-gray">整理</span></td></tr>
+      <tr><td>6</td><td><b>R-6 簡素化</b>: seed_mode UI の見直し・単一値変数は Styles 案内・fallback 展開の要否判断</td><td><span class="tag t-blue">設計判断</span></td></tr>
+      <tr><td>7</td><td><b>R-7 計測</b>: VRAM Recycler の効果を 3 連続生成の VRAM 推移で記録（L3）</td><td><span class="tag t-blue">L3 計測</span></td></tr>
+    </table>
+    <div class="note">進行中の Step2/3（通常生成の履歴記録・再開）は R-6 の分析からも<b>本拡張の存在意義そのもの</b>（他ツールに無い差別化点が「履歴/再開」）なので、本レビューの修正群とは独立に完遂する価値が高い。</div>
+  </section>
+
+  <p class="foot">レビューはコード精読ベース（forge 実機なし）。🟠 は実機確認で白黒を付けてから修正判断してください。</p>
+</div>
+</body>
+</html>
