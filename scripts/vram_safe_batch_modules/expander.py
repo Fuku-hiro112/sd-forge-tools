@@ -7,16 +7,22 @@
     inline_slot := '//' alt_text '//'       # 閉じ形
                  | '//' alt_text            # 不閉じ（EOL/末尾まで）
     alt_text    := segment (';' segment)*   # ; で alternation
-    segment     := (literal | var_ref)*
+    segment     := (literal | var_ref | random_group)*
     var_ref     := '$' name                 # name は Unicode 単語文字
+    random_group := '{' alt_text '}'        # ランダム選択グループ（下記参照）
 
 評価戦略:
     1. parse_main_prompt: 変数定義 (変数--- / 行頭 $x=...) を抽出 → body
     2. parse_body_into_slots: body を //.../...// 境界でスロット列に
-    3. 各スロットを ; で分割 → alts 配列
+    3. 各スロットを ; で分割 → alts 配列（{...} 内の ; は分割対象外・保護される）
     4. スロット alts の直積で template を生成（カンマ自動補完）
     5. 各 template の $var を再帰的に展開
        - 値が ; や // を含む場合は値を template に振り押した後、同じパーサで再評価
+    6. 展開が完了した最終プロンプト文字列ごとに {alt1;alt2;...} を解決
+       - 直積（カンマ補完・$var 展開）には一切参加せず、生成される画像枚数を変えない
+       - 各最終文字列に対して独立に random.choice で1つ選ぶ（同じバッチ内でも毎回バラける）
+       - 選択肢が2つ未満（; を含まない {...}）は無変更のまま残す
+         （旧 {N} 記法や `{強調語}` のような単体の中括弧との衝突を避けるため）
 
 カンマ自動補完:
     スロット連結時、両端にカンマが無い境界に "," を1つ挿入。
@@ -25,6 +31,7 @@
 from __future__ import annotations
 
 import itertools
+import random
 import re
 from dataclasses import dataclass, field
 from typing import Iterable
@@ -123,8 +130,30 @@ def _store_definition(target: dict[str, list[str]], name: str, raw_values: str) 
 
 
 def _split_alternations(text: str) -> list[str]:
-    """; で区切り、各値の前後空白除去、空値はスキップ."""
-    return [v.strip() for v in text.split(";") if v.strip() != ""]
+    """; で区切り、各値の前後空白除去、空値はスキップ.
+
+    { と対応する } の内側にある ; は分割対象外
+    （{alt1;alt2} ランダム選択グループの中身を1つの値として保護する）。
+    波括弧を含まないテキストに対しては text.split(";") と完全に同じ結果になる。
+    """
+    parts: list[str] = []
+    depth = 0
+    buf: list[str] = []
+    for ch in text:
+        if ch == "{":
+            depth += 1
+            buf.append(ch)
+        elif ch == "}":
+            if depth > 0:
+                depth -= 1
+            buf.append(ch)
+        elif ch == ";" and depth == 0:
+            parts.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    parts.append("".join(buf))
+    return [p.strip() for p in parts if p.strip() != ""]
 
 
 def merge_variables(
@@ -270,6 +299,70 @@ def _join_with_auto_comma(parts: list[str]) -> str:
 
 
 # ====================================================
+#  ランダム選択グループ: {alt1;alt2;...}
+# ====================================================
+def _find_matching_brace(text: str, open_pos: int) -> int | None:
+    """text[open_pos] == '{' に対応する閉じ '}' の位置を深さカウントで探す.
+
+    対応する閉じ括弧が見つからない場合は None。
+    """
+    depth = 0
+    for j in range(open_pos, len(text)):
+        if text[j] == "{":
+            depth += 1
+        elif text[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return j
+    return None
+
+
+def _resolve_random_groups_once(text: str) -> tuple[str, bool]:
+    """トップレベルの {alt1;alt2;...} を1つ random.choice で選び置換する（1パス分）.
+
+    選択肢が2つ未満（; を含まない {...}）は対象外とし、無変更のまま残す。
+    これにより旧 {N} 記法や `{強調語}` のような単体の中括弧は影響を受けない。
+    """
+    out: list[str] = []
+    i = 0
+    n = len(text)
+    changed = False
+    while i < n:
+        if text[i] == "{":
+            close = _find_matching_brace(text, i)
+            if close is None:
+                out.append(text[i])
+                i += 1
+                continue
+            inner = text[i + 1:close]
+            alts = _split_alternations(inner)
+            if len(alts) < 2:
+                out.append(text[i:close + 1])
+                i = close + 1
+                continue
+            out.append(random.choice(alts))
+            changed = True
+            i = close + 1
+        else:
+            out.append(text[i])
+            i += 1
+    return "".join(out), changed
+
+
+def _resolve_random_groups(text: str) -> str:
+    """{alt1;alt2;...} を再帰的に解決する.
+
+    選ばれた値が更に {} を含む場合の入れ子に対応するため、変化が無くなるまで
+    （最大 _MAX_NESTED_DEPTH 回まで）繰り返し適用する。
+    """
+    for _ in range(_MAX_NESTED_DEPTH):
+        text, changed = _resolve_random_groups_once(text)
+        if not changed:
+            break
+    return text
+
+
+# ====================================================
 #  expand_prompts: スロット直積 + 再帰的変数展開
 # ====================================================
 def expand_prompts(
@@ -277,7 +370,12 @@ def expand_prompts(
     variables: dict[str, list[str]],
     expansion_order: Iterable[str],
 ) -> list[str]:
-    """body をスロット分解 → 直積で template 列 → 各 template に変数展開を施す."""
+    """body をスロット分解 → 直積で template 列 → 各 template に変数展開を施す.
+
+    最後に、生成された各最終プロンプト文字列に対して独立に
+    {alt1;alt2;...} ランダム選択グループを解決する（直積展開には参加しないため
+    生成枚数は変わらず、画像ごとに独立してランダムな値になる）。
+    """
     order = list(expansion_order)
     slots = parse_body_into_slots(body)
     templates = _generate_templates(slots)
@@ -285,7 +383,7 @@ def expand_prompts(
     results: list[str] = []
     for tpl in templates:
         results.extend(_expand_recursively(tpl, variables, order, depth=0))
-    return results
+    return [_resolve_random_groups(r) for r in results]
 
 
 def _generate_templates(slots: list[Slot]) -> list[str]:
